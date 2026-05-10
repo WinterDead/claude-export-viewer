@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_macros.html" import memory_block %}
+
+{% block title %}Home — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="overview">
+  <h1>Welcome, {{ g_user_name }}</h1>
+  <p class="lede">
+    Your Claude.ai export is loaded and ready to browse.
+  </p>
+
+  <dl class="stats">
+    <dt>Conversations</dt><dd>{{ total_conversations }}</dd>
+    <dt>Messages</dt><dd>{{ total_messages }}</dd>
+    <dt>Branched conversations</dt><dd>{{ branched_conversations }}</dd>
+    <dt>Projects</dt><dd>{{ total_projects }}</dd>
+    <dt>Project memories</dt><dd>{{ project_memories }}</dd>
+    {% if orphan_memories %}
+      <dt>Orphan project memories</dt><dd>{{ orphan_memories }}</dd>
+    {% endif %}
+  </dl>
+</section>
+
+<section class="memory">
+  {% if global_memory_block %}
+    {# Pre-collapsed: home is a dashboard, not the memory deep-read surface.
+       The full /memory view is one click away in the nav. #}
+    {{ memory_block(global_memory_block) }}
+  {% else %}
+    <h2>Global memory</h2>
+    <p class="empty">No global memory recorded.</p>
+  {% endif %}
+</section>
+{% endblock %}

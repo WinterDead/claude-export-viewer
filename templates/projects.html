@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Projects — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="projects">
+  <header class="page-header">
+    <h1>Projects</h1>
+    <p class="lede">{{ projects | length }} total.</p>
+  </header>
+
+  <nav class="sort-toggle" aria-label="Sort order">
+    <a href="{{ url_for('viewer.project_list', sort='updated_desc') }}"
+       class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
+      Recently updated
+    </a>
+    <a href="{{ url_for('viewer.project_list', sort='name_asc') }}"
+       class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
+      Name (A–Z)
+    </a>
+  </nav>
+
+  {% if not projects %}
+    <p class="empty">No projects in this export.</p>
+  {% else %}
+    <ul class="project-list">
+      {% for p in projects %}
+        <li class="project-row">
+          <a class="project-title-link" href="{{ url_for('viewer.project_detail', uuid=p.uuid) }}">
+            <span class="project-title">{{ p.name }}</span>
+            {% if p.is_starter %}
+              <span class="badge badge-starter">Starter</span>
+            {% endif %}
+          </a>
+          {% if p.description %}
+            <p class="project-description">{{ p.description }}</p>
+          {% endif %}
+          <p class="project-meta">
+            <span title="{{ p.updated_at | format_local }}">
+              Updated {{ p.updated_at | format_local_relative }}
+            </span>
+            <span aria-hidden="true"> · </span>
+            <span>
+              {{ p.docs | length }}
+              doc{% if p.docs | length != 1 %}s{% endif %}
+            </span>
+            <span aria-hidden="true"> · </span>
+            <span>
+              {{ tag_counts.get(p.uuid, 0) }}
+              tagged conversation{% if tag_counts.get(p.uuid, 0) != 1 %}s{% endif %}
+            </span>
+            {% if p.memory %}
+              <span aria-hidden="true"> · </span>
+              <span>memory present</span>
+            {% endif %}
+          </p>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+{% endblock %}

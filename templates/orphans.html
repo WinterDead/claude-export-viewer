@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Orphan tags — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="orphans-page">
+  <header class="page-header">
+    <h1>Orphan tags</h1>
+    <p class="lede">
+      Tag rows that no longer resolve against the loaded archive. Preserved
+      rather than silently dropped — see CLAUDE.md's preserve-and-flag
+      pattern. Purge only when you're sure the missing entity isn't coming
+      back in a later import.
+    </p>
+  </header>
+
+  {% if state.orphan_count == 0 %}
+    <p class="empty">No orphan tags. Everything in the tag table resolves.</p>
+  {% else %}
+    <section class="orphan-section">
+      <h2>
+        Orphan conversations
+        <span class="memory-count">({{ orphan_conv_rows | length }})</span>
+      </h2>
+      {% if orphan_conv_rows %}
+        <p class="lede">
+          The conversation isn't in the current archive. Tag is preserved
+          in case the conversation reappears in a future export.
+        </p>
+        <table class="orphan-table">
+          <thead>
+            <tr>
+              <th>Conversation UUID</th>
+              <th>Tagged to</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in orphan_conv_rows %}
+              <tr>
+                <td><code>{{ row.conversation_uuid }}</code></td>
+                <td>
+                  {% if row.project %}
+                    <a href="{{ url_for('viewer.project_detail', uuid=row.project.uuid) }}">
+                      {{ row.project.name }}
+                    </a>
+                  {% else %}
+                    <code>{{ row.project_uuid }}</code>
+                    <span class="orphan-tag-flag">project also missing</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">None.</p>
+      {% endif %}
+    </section>
+
+    <section class="orphan-section">
+      <h2>
+        Orphan projects on live conversations
+        <span class="memory-count">({{ orphan_project_rows | length }})</span>
+      </h2>
+      {% if orphan_project_rows %}
+        <p class="lede">
+          The conversation still exists, but its tagged project doesn't.
+          Retag or clear from the conversation page.
+        </p>
+        <table class="orphan-table">
+          <thead>
+            <tr>
+              <th>Conversation</th>
+              <th>Tagged project (orphan)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in orphan_project_rows %}
+              <tr>
+                <td>
+                  {% if row.conv %}
+                    <a href="{{ url_for('viewer.conversation_detail', uuid=row.conv.uuid) }}">
+                      {{ row.conv | display_title }}
+                    </a>
+                  {% else %}
+                    <code>{{ row.conversation_uuid }}</code>
+                  {% endif %}
+                </td>
+                <td><code>{{ row.project_uuid }}</code></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <p class="empty">None.</p>
+      {% endif %}
+    </section>
+
+    <section class="orphan-section orphan-purge">
+      <h2>Purge</h2>
+      <form method="post" action="{{ url_for('viewer.orphans_purge') }}" class="orphan-purge-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="orphan-purge-label">
+          <input type="checkbox" name="confirm" value="yes" required>
+          Yes, delete <strong>{{ state.orphan_count }}</strong>
+          orphan tag row{% if state.orphan_count != 1 %}s{% endif %}.
+        </label>
+        <button type="submit" class="orphan-purge-btn">Purge orphan tags</button>
+      </form>
+      <p class="lede">
+        Tags are deleted from the local SQLite cache only. Claude.ai is not
+        contacted. Purging is undoable only by re-tagging from scratch.
+      </p>
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

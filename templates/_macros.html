@@ -1,0 +1,93 @@
+{# Reusable Jinja macros. Imported via {% from "_macros.html" import ... %} #}
+
+{% macro memory_block(mem) %}
+  {# Collapsible memory block (plan §12 polish). Closed by default; the
+     anchor-expansion JS in static/memory.js opens it (and any enclosing
+     details) when the URL hash points inside.
+
+     Internal sections are themselves <details>, expanded by default. The
+     per-memory expand/collapse-all toggle in .memory-block-controls is
+     scoped via static/memory.js so toggling Memory A doesn't affect
+     Memory B. The control bar is omitted for single-block fallback memories
+     (``has_sections == false``) — there's nothing to expand or collapse. #}
+  <details class="memory-block memory-block-{{ mem.kind }}" id="{{ mem.anchor_id }}">
+    <summary class="memory-block-summary">
+      {% if mem.kind == 'project' %}
+        <a href="{{ url_for('viewer.project_detail', uuid=mem.project_uuid) }}"
+           class="memory-block-title-link"
+           onclick="event.stopPropagation()">{{ mem.title }}</a>
+        {% if mem.is_starter %}
+          <span class="badge badge-starter">Starter</span>
+        {% endif %}
+      {% elif mem.kind == 'orphan' %}
+        <code class="memory-orphan-uuid">{{ mem.title }}</code>
+        <span class="orphan-tag-flag">orphan</span>
+      {% else %}
+        <span class="memory-block-title">{{ mem.title }}</span>
+      {% endif %}
+      <span class="memory-block-meta">{{ mem.char_count }} chars</span>
+    </summary>
+
+    {% if mem.has_sections %}
+      <div class="memory-block-controls">
+        <button type="button" class="memory-section-toggle"
+                data-action="expand">Expand all sections</button>
+        <button type="button" class="memory-section-toggle"
+                data-action="collapse">Collapse all sections</button>
+      </div>
+    {% endif %}
+
+    <div class="memory-block-body">
+      {% for title, content in mem.sections %}
+        {% if title %}
+          <details class="memory-section" open
+                   id="{{ mem.anchor_id }}--{{ title | slugify }}">
+            <summary class="memory-section-summary">{{ title }}</summary>
+            <div class="markdown-body">{{ content | markdown }}</div>
+          </details>
+        {% else %}
+          {% if content %}
+            <div class="markdown-body memory-block-preamble">{{ content | markdown }}</div>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    </div>
+  </details>
+{% endmacro %}
+
+
+{% macro tag_form(conv_uuid, current_tag, projects, next_url, label="Project", current_tag_orphan=false) %}
+  {# Canonical state-changing-form pattern (plan §11). Every future POST form
+     should mirror this structure: csrf_token first, then the fields.
+
+     ``current_tag_orphan`` (plan §12 step 7): True when ``current_tag`` is a
+     project_uuid that's no longer in the current Export. The dropdown
+     surfaces it as a ``(Orphan: <uuid>)`` option so the user can retag or
+     clear, instead of silently rendering as "(Untagged)" — that would lose
+     information and look like a bug. #}
+  <form method="post" action="{{ url_for('viewer.tag_conversation') }}" class="tag-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="conversation_uuid" value="{{ conv_uuid }}">
+    <input type="hidden" name="next" value="{{ next_url }}">
+    <label class="tag-form-label">
+      <span class="tag-form-text">{{ label }}:</span>
+      <select name="project_uuid" class="tag-form-select"
+              onchange="this.form.submit()"
+              {% if not projects and not current_tag_orphan %}disabled{% endif %}>
+        <option value="" {% if not current_tag %}selected{% endif %}>(Untagged)</option>
+        {% if current_tag_orphan %}
+          <option value="{{ current_tag }}" selected class="tag-form-orphan">
+            (Orphan: {{ current_tag }})
+          </option>
+        {% endif %}
+        {% for p in projects %}
+          <option value="{{ p.uuid }}"
+                  {% if p.uuid == current_tag and not current_tag_orphan %}selected{% endif %}>
+            {{ p.name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <noscript><button type="submit" class="tag-form-submit">Save</button></noscript>
+  </form>
+{% endmacro %}

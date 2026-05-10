@@ -1,0 +1,80 @@
+{# Single-message partial. Rendering scope per plan §12 step 3:
+   - text         → markdown
+   - thinking     → collapsible <details>
+   - tool_use     → typed placeholder card (block type + tool name)
+   - tool_result  → typed placeholder card (block type + inner block count)
+   Artifacts, nested tool_result, and Pygments syntax highlighting are deferred. #}
+<article class="msg msg-{{ msg.sender }}" id="msg-{{ msg.uuid }}">
+  <header class="msg-header">
+    <span class="msg-sender">{{ msg.sender }}</span>
+    <span aria-hidden="true"> · </span>
+    <time title="{{ msg.created_at | format_local }}" datetime="{{ msg.created_at }}">
+      {{ msg.created_at | format_local_relative }}
+    </time>
+  </header>
+
+  <div class="msg-body">
+    {% for block in msg.content %}
+      {% set bt = block | block_type %}
+      {% if bt == 'text' %}
+        <div class="markdown-body">{{ block.text | markdown }}</div>
+      {% elif bt == 'thinking' %}
+        <details class="thinking">
+          <summary>
+            Thinking ({{ block.thinking | length }} chars)
+            {% if block.truncated %} · truncated{% endif %}
+            {% if block.cut_off %} · cut off{% endif %}
+          </summary>
+          <div class="markdown-body thinking-body">{{ block.thinking | markdown }}</div>
+        </details>
+      {% elif bt == 'tool_use' %}
+        <aside class="block-card block-tool-use">
+          <span class="block-card-tag">tool_use</span>
+          <span class="block-card-name">{{ block.name }}</span>
+          {% if block.is_mcp %}<span class="block-card-mcp">MCP</span>{% endif %}
+        </aside>
+      {% elif bt == 'tool_result' %}
+        <aside class="block-card block-tool-result {% if block.is_error %}is-error{% endif %}">
+          <span class="block-card-tag">tool_result</span>
+          <span class="block-card-name">{{ block.name }}</span>
+          <span class="block-card-meta">
+            {{ block.inner | length }} inner block{% if block.inner | length != 1 %}s{% endif %}
+            {% if block.is_error %} · error{% endif %}
+          </span>
+        </aside>
+      {% else %}
+        <aside class="block-card block-unknown">
+          <span class="block-card-tag">{{ bt }}</span>
+        </aside>
+      {% endif %}
+    {% endfor %}
+
+    {% if msg.attachments %}
+      <details class="attachments">
+        <summary>
+          {{ msg.attachments | length }}
+          attachment{% if msg.attachments | length != 1 %}s{% endif %}
+        </summary>
+        {% for att in msg.attachments %}
+          <article class="attachment">
+            <header>
+              <strong>{{ att.file_name or '(unnamed attachment)' }}</strong>
+              <small>· {{ att.file_type or 'unknown type' }} · {{ att.file_size }} bytes</small>
+            </header>
+            <div class="markdown-body">{{ att.extracted_content | markdown }}</div>
+          </article>
+        {% endfor %}
+      </details>
+    {% endif %}
+
+    {% if msg.files %}
+      <p class="files-note">
+        {{ msg.files | length }} binary file{% if msg.files | length != 1 %}s{% endif %}
+        attached (not included in export):
+        {% for f in msg.files %}
+          <code>{{ f.file_name or '(unnamed)' }}</code>{% if not loop.last %}, {% endif %}
+        {% endfor %}
+      </p>
+    {% endif %}
+  </div>
+</article>

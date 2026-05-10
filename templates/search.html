@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}
+  {% if query %}{{ query }} — Search{% else %}Search{% endif %} — Claude Export Viewer
+{% endblock %}
+
+{% block content %}
+<section class="search-page">
+  <header class="page-header">
+    <h1>Search</h1>
+  </header>
+
+  <form method="get" action="{{ url_for('viewer.search_view') }}" class="search-form" role="search">
+    <label class="search-form-label" for="search-q">
+      <span class="visually-hidden">Search</span>
+      <input id="search-q"
+             name="q"
+             type="search"
+             value="{{ query }}"
+             autofocus
+             autocomplete="off"
+             placeholder="Search conversations, projects, memory…"
+             class="search-input">
+    </label>
+    <button type="submit" class="search-submit">Search</button>
+  </form>
+
+  {% if not query %}
+    <p class="search-hint">
+      Just type — punctuation, apostrophes, and hyphens are handled for you.
+      For finer control: <code>"exact phrases"</code>,
+      <code>prefix*</code> matches,
+      <code>NEAR(a b, 5)</code> for proximity, or
+      <code>AND</code> / <code>OR</code> / <code>NOT</code> to combine or
+      exclude terms.
+    </p>
+  {% elif results.error %}
+    <p class="warn">{{ results.error }}</p>
+  {% elif results.total == 0 %}
+    <p class="empty">No matches for <code>{{ query }}</code>.</p>
+  {% else %}
+    <p class="lede">
+      {% if results.capped %}
+        Showing first {{ results.hits | length }} of {{ results.total }}+ matches —
+        refine your query to narrow this down.
+      {% else %}
+        {{ results.total }} match{% if results.total != 1 %}es{% endif %}.
+      {% endif %}
+    </p>
+
+    {# ---------- Conversation hits ---------- #}
+    {% if conv_groups %}
+      <section class="search-section">
+        <h2>Conversations <span class="memory-count">({{ conv_groups | length }})</span></h2>
+        {% for g in conv_groups %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.conversation_detail', uuid=g.conv.uuid) }}">
+                {{ g.conv | display_title }}
+              </a>
+            </h3>
+            {% if g.summary_hit %}
+              <p class="search-snippet">
+                <span class="search-snippet-label">Summary:</span>
+                {{ g.summary_hit.snippet | search_snippet }}
+              </p>
+            {% endif %}
+            {% if g.message_hits %}
+              <ul class="search-message-hits">
+                {% for m in g.message_hits %}
+                  <li>
+                    {% if m.is_canonical %}
+                      {% set href = url_for('viewer.conversation_detail', uuid=g.conv.uuid)
+                                    ~ '#msg-' ~ m.msg.uuid %}
+                    {% else %}
+                      {% set href = url_for('viewer.conversation_detail',
+                                            uuid=g.conv.uuid, branch=m.msg.uuid)
+                                    ~ '#msg-' ~ m.msg.uuid %}
+                    {% endif %}
+                    <a href="{{ href }}" class="search-message-link">
+                      <span class="search-message-sender">{{ m.msg.sender }}</span>
+                      <span class="search-message-time">
+                        {{ m.msg.created_at | format_local_relative }}
+                      </span>
+                      {% if not m.is_canonical %}
+                        <span class="search-message-branch">alternate branch</span>
+                      {% endif %}
+                    </a>
+                    <div class="search-snippet">{{ m.hit.snippet | search_snippet }}</div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    {# ---------- Project hits ---------- #}
+    {% if project_groups %}
+      <section class="search-section">
+        <h2>Projects <span class="memory-count">({{ project_groups | length }})</span></h2>
+        {% for g in project_groups %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.project_detail', uuid=g.project.uuid) }}">
+                {{ g.project.name }}
+              </a>
+              {% if g.project.is_starter %}
+                <span class="badge badge-starter">Starter</span>
+              {% endif %}
+            </h3>
+            {% if g.meta_hit %}
+              <p class="search-snippet">
+                <span class="search-snippet-label">Description:</span>
+                {{ g.meta_hit.snippet | search_snippet }}
+              </p>
+            {% endif %}
+            {% if g.memory_hit %}
+              <p class="search-snippet">
+                <span class="search-snippet-label">
+                  <a href="{{ url_for('viewer.memory_view') }}#memory-{{ g.project.uuid }}">
+                    Project memory:
+                  </a>
+                </span>
+                {{ g.memory_hit.snippet | search_snippet }}
+              </p>
+            {% endif %}
+            {% if g.doc_hits %}
+              <ul class="search-message-hits">
+                {% for d in g.doc_hits %}
+                  <li>
+                    <span class="search-doc-name">{{ d.doc.filename or '(unnamed)' }}</span>
+                    <div class="search-snippet">{{ d.hit.snippet | search_snippet }}</div>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+
+    {# ---------- Memory hits ---------- #}
+    {% if memory_global or memory_orphans %}
+      <section class="search-section">
+        <h2>Memory</h2>
+        {% if memory_global %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.memory_view') }}#global-memory">
+                Global memory
+              </a>
+            </h3>
+            <div class="search-snippet">{{ memory_global.hit.snippet | search_snippet }}</div>
+          </article>
+        {% endif %}
+        {% for o in memory_orphans %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.memory_view') }}#memory-{{ o.hit.project_uuid }}">
+                Orphan memory
+              </a>
+              <code class="search-orphan-uuid">{{ o.hit.project_uuid }}</code>
+            </h3>
+            <div class="search-snippet">{{ o.hit.snippet | search_snippet }}</div>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

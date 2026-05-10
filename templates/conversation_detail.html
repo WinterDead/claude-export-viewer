@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tag_form %}
+
+{% block title %}{{ conv | display_title }} — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="conv-detail">
+  <p class="breadcrumb">
+    <a href="{{ url_for('viewer.conversation_list') }}">← All conversations</a>
+  </p>
+
+  <header class="conv-header">
+    <h1>{{ conv | display_title }}</h1>
+    {% if conv.summary %}
+      <p class="conv-summary-detail">{{ conv.summary }}</p>
+    {% endif %}
+    <p class="conv-meta">
+      <span title="{{ conv.created_at | format_local }}">
+        Created {{ conv.created_at | format_local_relative }}
+      </span>
+      <span aria-hidden="true"> · </span>
+      <span title="{{ conv.updated_at | format_local }}">
+        Updated {{ conv.updated_at | format_local_relative }}
+      </span>
+      <span aria-hidden="true"> · </span>
+      <span>
+        {{ rendered_count }} of {{ total_count }} message{% if total_count != 1 %}s{% endif %}
+        on this branch
+      </span>
+      {% if conv.branch_points %}
+        <span aria-hidden="true"> · </span>
+        <span class="conv-branched">
+          {{ conv.branch_points | length }}
+          branch point{% if conv.branch_points | length != 1 %}s{% endif %}
+        </span>
+      {% endif %}
+    </p>
+
+    <div class="conv-tag">
+      {{ tag_form(conv.uuid, current_tag, projects, request.full_path,
+                  label='Project', current_tag_orphan=current_tag_orphan) }}
+    </div>
+  </header>
+
+  {% if ignored_overrides %}
+    <p class="warn">
+      Ignored unknown branch override{% if ignored_overrides | length != 1 %}s{% endif %}:
+      {% for o in ignored_overrides %}<code>{{ o }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+  {% endif %}
+
+  {% if not rendered_messages %}
+    <p class="empty">Empty conversation.</p>
+  {% else %}
+    <div class="msg-thread">
+      {% for msg in rendered_messages %}
+        {% include "_message.html" %}
+
+        {% if msg.uuid in switchers %}
+          {% set siblings = switchers[msg.uuid] %}
+          <nav class="branch-switcher" aria-label="Sibling responses">
+            <span class="branch-label">
+              Branch point — {{ siblings | length }} sibling responses:
+            </span>
+            <ol class="branch-options">
+              {% for sib in siblings %}
+                <li>
+                  {% if sib.is_active %}
+                    <span class="branch-option active" aria-current="true">
+                      {{ loop.index }}. {{ sib.msg.sender }}
+                      <span class="branch-time">
+                        {{ sib.msg.created_at | format_local_relative }}
+                      </span>
+                      <span class="branch-meta">(currently shown)</span>
+                    </span>
+                  {% else %}
+                    <a class="branch-option"
+                       href="{{ url_for('viewer.conversation_detail',
+                                       uuid=conv.uuid,
+                                       branch=sib.branch_args) }}">
+                      {{ loop.index }}. {{ sib.msg.sender }}
+                      <span class="branch-time">
+                        {{ sib.msg.created_at | format_local_relative }}
+                      </span>
+                    </a>
+                  {% endif %}
+                </li>
+              {% endfor %}
+            </ol>
+          </nav>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

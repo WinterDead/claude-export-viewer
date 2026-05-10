@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import memory_block %}
+
+{% block title %}Memory — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="memory-page">
+  <header class="page-header">
+    <h1>Memory</h1>
+    <p class="lede">
+      What Claude has stored about you, across conversations and projects.
+      Each memory is collapsed by default — click a header to expand.
+    </p>
+  </header>
+
+  {# Sort toggle: same pattern as the conversation list. Global memory is
+     always rendered first regardless of sort; the toggle only affects the
+     project-memories ordering. #}
+  <nav class="sort-toggle" aria-label="Sort project memories">
+    <a href="{{ url_for('viewer.memory_view', sort='updated_desc') }}"
+       class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
+      Most recent
+    </a>
+    <a href="{{ url_for('viewer.memory_view', sort='name_asc') }}"
+       class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
+      Alphabetical
+    </a>
+    <a href="{{ url_for('viewer.memory_view', sort='created_desc') }}"
+       class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
+      Newest
+    </a>
+  </nav>
+
+  {% if not memories and not orphans %}
+    <p class="empty">No memory recorded in this archive.</p>
+  {% else %}
+    <div class="memory-list">
+      {% for mem in memories %}
+        {{ memory_block(mem) }}
+      {% endfor %}
+    </div>
+
+    {% if orphans %}
+      <section class="memory-section memory-orphans">
+        <h2>
+          Orphan memories
+          <span class="memory-count">({{ orphans | length }})</span>
+        </h2>
+        <p class="warn">
+          These memories reference projects that aren't in the current
+          archive — likely from a previous export, or a project deleted
+          from Claude.ai before this archive was generated. The parser
+          preserves them rather than silently dropping; surface here so
+          they're visible.
+        </p>
+        <div class="memory-list">
+          {% for mem in orphans %}
+            {{ memory_block(mem) }}
+          {% endfor %}
+        </div>
+      </section>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

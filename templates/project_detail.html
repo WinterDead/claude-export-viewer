@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="project-detail">
+  <p class="breadcrumb">
+    <a href="{{ url_for('viewer.project_list') }}">← All projects</a>
+  </p>
+
+  <header class="project-header">
+    <h1>
+      {{ project.name }}
+      {% if project.is_starter %}
+        <span class="badge badge-starter">Starter</span>
+      {% endif %}
+    </h1>
+    {% if project.description %}
+      <p class="project-description">{{ project.description }}</p>
+    {% endif %}
+    <p class="project-meta">
+      <span title="{{ project.created_at | format_local }}">
+        Created {{ project.created_at | format_local_relative }}
+      </span>
+      <span aria-hidden="true"> · </span>
+      <span title="{{ project.updated_at | format_local }}">
+        Updated {{ project.updated_at | format_local_relative }}
+      </span>
+    </p>
+  </header>
+
+  <section class="project-section">
+    <h2>Tagged conversations</h2>
+    {% if tagged_conversations %}
+      <ul class="conv-list compact">
+        {% for c in tagged_conversations %}
+          <li class="conv-row">
+            <a class="conv-title-link"
+               href="{{ url_for('viewer.conversation_detail', uuid=c.uuid) }}">
+              <span class="conv-title">{{ c | display_title }}</span>
+            </a>
+            <p class="conv-meta">
+              <span>{{ c.messages | length }} message{% if c.messages | length != 1 %}s{% endif %}</span>
+              <span aria-hidden="true"> · </span>
+              <span title="{{ c.updated_at | format_local }}">
+                Updated {{ c.updated_at | format_local_relative }}
+              </span>
+            </p>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">
+        No conversations tagged to this project yet.
+        <a href="{{ url_for('viewer.conversation_list', tag='untagged') }}">
+          Tag some from the untagged list →
+        </a>
+      </p>
+    {% endif %}
+  </section>
+
+  {% if project.prompt_template %}
+    <section class="project-section">
+      <details>
+        <summary><h2>Prompt template</h2></summary>
+        <div class="markdown-body">{{ project.prompt_template | markdown }}</div>
+      </details>
+    </section>
+  {% endif %}
+
+  {% if project.docs %}
+    <section class="project-section">
+      <h2>Knowledge documents ({{ project.docs | length }})</h2>
+      {% for doc in project.docs %}
+        <details class="project-doc">
+          <summary>
+            <span class="project-doc-name">{{ doc.filename or '(unnamed)' }}</span>
+            <span class="project-doc-meta">
+              {{ doc.content | length }} chars
+              · added {{ doc.created_at | format_local_relative }}
+            </span>
+          </summary>
+          <div class="markdown-body">{{ doc.content | markdown }}</div>
+        </details>
+      {% endfor %}
+    </section>
+  {% else %}
+    <section class="project-section">
+      <h2>Knowledge documents</h2>
+      <p class="empty">No knowledge documents.</p>
+    </section>
+  {% endif %}
+
+  <section class="project-section">
+    <h2>Project memory</h2>
+    {% if project.memory %}
+      <details class="project-memory">
+        <summary>{{ project.memory.content | length }} chars</summary>
+        <div class="markdown-body">{{ project.memory.content | markdown }}</div>
+      </details>
+    {% else %}
+      <p class="empty">No project memory recorded.</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

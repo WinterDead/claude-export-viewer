@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tag_form %}
+
+{% block title %}Conversations — Claude Export Viewer{% endblock %}
+
+{% block extra_head %}
+  <script src="{{ url_for('static', filename='bulk_tag.js') }}" defer></script>
+{% endblock %}
+
+{% block content %}
+<section class="conversations">
+  <header class="page-header">
+    <h1>Conversations</h1>
+    <p class="lede">
+      Showing {{ conversations | length }} of {{ total_conversations }}.
+    </p>
+  </header>
+
+  {# Bulk action bar — managed by static/bulk_tag.js. The form attribute on
+     each per-row checkbox associates it with this form despite not being
+     nested under it, so checked uuids are submitted automatically. #}
+  <form id="bulk-form"
+        method="post"
+        action="{{ url_for('viewer.tag_bulk') }}"
+        class="bulk-bar"
+        data-count="0">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <span class="bulk-count" data-count="0">0 selected</span>
+    <span class="bulk-already-tagged" data-count="0" hidden></span>
+    <select name="project_uuid" class="bulk-project-picker" aria-label="Pick a project">
+      <option value="">Pick a project…</option>
+      {% for p in projects %}
+        <option value="{{ p.uuid }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" name="mode" value="tag"
+            class="bulk-btn bulk-btn-tag" disabled>
+      Tag selected
+    </button>
+    <button type="submit" name="mode" value="retag"
+            class="bulk-btn bulk-btn-retag" hidden disabled>
+      Retag all (overwrite)
+    </button>
+    <button type="submit" name="mode" value="untag"
+            class="bulk-btn bulk-btn-untag" disabled>
+      Untag selected
+    </button>
+  </form>
+
+  <div class="list-controls">
+    <nav class="sort-toggle" aria-label="Sort order">
+      <a href="{{ url_for('viewer.conversation_list', sort='updated_desc', tag=tag_filter) }}"
+         class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
+        Recently updated
+      </a>
+      <a href="{{ url_for('viewer.conversation_list', sort='created_desc', tag=tag_filter) }}"
+         class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
+        Recently created
+      </a>
+      <a href="{{ url_for('viewer.conversation_list', sort='title_asc', tag=tag_filter) }}"
+         class="sort-option{% if sort == 'title_asc' %} active{% endif %}">
+        Title (A–Z)
+      </a>
+    </nav>
+
+    <form method="get" action="{{ url_for('viewer.conversation_list') }}" class="tag-filter">
+      <label class="tag-filter-label">
+        <span class="tag-filter-text">Filter:</span>
+        <select name="tag" onchange="this.form.submit()" class="tag-filter-select">
+          <option value="" {% if not tag_filter %}selected{% endif %}>All conversations</option>
+          <option value="untagged" {% if tag_filter == 'untagged' %}selected{% endif %}>Untagged</option>
+          {% for p in projects %}
+            <option value="{{ p.uuid }}" {% if tag_filter == p.uuid %}selected{% endif %}>
+              Tagged: {{ p.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <input type="hidden" name="sort" value="{{ sort }}">
+      <noscript><button type="submit">Filter</button></noscript>
+    </form>
+  </div>
+
+  {% if not conversations %}
+    {% if tag_filter == 'untagged' %}
+      <p class="empty">All conversations are tagged. Nothing to do here.</p>
+    {% elif tag_filter %}
+      <p class="empty">No conversations tagged to this project yet.</p>
+    {% else %}
+      <p class="empty">No conversations in this export.</p>
+    {% endif %}
+  {% else %}
+    <ul class="conv-list">
+      {% for c in conversations %}
+        <li class="conv-row" data-tagged="{{ tags.get(c.uuid, '') }}">
+          <input type="checkbox"
+                 form="bulk-form"
+                 name="conversation_uuid"
+                 value="{{ c.uuid }}"
+                 class="conv-checkbox"
+                 aria-label="Select for bulk tagging">
+          <div class="conv-row-main">
+            <a class="conv-title-link"
+               href="{{ url_for('viewer.conversation_detail', uuid=c.uuid) }}">
+              <span class="conv-title">{{ c | display_title }}</span>
+            </a>
+            {% if c.summary %}
+              <p class="conv-summary">{{ c.summary | summary_preview }}</p>
+            {% endif %}
+            <p class="conv-meta">
+              <span>
+                {{ c.messages | length }}
+                message{% if c.messages | length != 1 %}s{% endif %}
+              </span>
+              <span aria-hidden="true"> · </span>
+              <span title="{{ c.updated_at | format_local }}">
+                Updated {{ c.updated_at | format_local_relative }}
+              </span>
+              {% if c.branch_points %}
+                <span aria-hidden="true"> · </span>
+                <span class="conv-branched">
+                  {{ c.branch_points | length }}
+                  branch point{% if c.branch_points | length != 1 %}s{% endif %}
+                </span>
+              {% endif %}
+            </p>
+          </div>
+          <div class="conv-row-tag">
+            {{ tag_form(c.uuid, tags.get(c.uuid), projects, request.full_path,
+                        label='Tag',
+                        current_tag_orphan=(c.uuid in orphan_project_tags)) }}
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% endif %}
+</section>
+{% endblock %}
