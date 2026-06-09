@@ -76,7 +76,23 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
     template level: no drive-letter paths, no "Dropbox", no machine usernames (checked
     dynamically via `getpass` so nothing personal is committed). The test fixture pins
     `Export.source_paths` to a bare filename because the footer echoes it verbatim.
-- **Session D** — artifact-encoding discovery against the real export (no app code).
+- **Session D** *(shipped)* — artifact-encoding discovery against the real export (no app
+  code; brief: `docs/briefs/v1.1-session-d-brief.md`; deliverable: `docs/artifact-encoding.md`).
+  Findings and locked decisions:
+  - The reference export's artifact calls are create-only `text/markdown` (34 calls across 28
+    conversations); zero `update`/`rewrite` commands exist anywhere in it, so edit-replay
+    semantics remain unverified inference — any future consumer treats those commands as
+    unknown-shape (preserve-and-flag) until an export containing them is scanned.
+  - Artifact `tool_use`/`tool_result` ids are null in the export — pairing is positional (the
+    result directly follows its call in the same message). Every observed result is a bare
+    `"OK"` acknowledgement.
+  - Truncation verdict: **no evidence of truncation** (six checks documented in the doc; the
+    strongest is that all 3,084 `md_citations` offsets fall within content bounds).
+  - Reconstruction verdict: **feasible** — the final state of every observed artifact is
+    literally its `create` call's `content`. Recommendation recorded as v1.2 planning input;
+    branch semantics (three candidate rules in the doc) deliberately left undecided.
+  - `tools/scan_artifacts.py` committed as a generic re-check utility (stdlib-only,
+    aggregate-only output) for the next time the export format shifts.
 - **Session E** — setup script (Python-presence check tier).
 - **Session F** — client-side syntax highlighting via vendored highlight.js.
 - **Session G** — README rewrite, LICENSE, synthetic-fixture screenshots, tag v1.1.0.
@@ -98,3 +114,8 @@ Small backlog (unscheduled, not part of any session above):
 
 - **Public-readiness audit** before the repo goes public: secret-key handling, host-binding
   confirmation, dependency pins.
+- **Artifact extraction** (Session D recommendation: feasible). Minimal scope proposed in
+  `docs/artifact-encoding.md`: reconstruct final state along the rendered path, render real
+  content in the placeholder cards, per-artifact download named from `title`/`type`,
+  preserve-and-flag for unobserved commands. Requires a decision on branch semantics (three
+  candidate rules in the doc) before implementation.
