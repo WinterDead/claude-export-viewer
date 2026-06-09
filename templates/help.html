@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Help — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="help-page">
+  <header class="page-header">
+    <h1>{{ title }}</h1>
+  </header>
+
+  {% if intro %}
+    <div class="markdown-body help-intro">{{ intro | markdown }}</div>
+  {% endif %}
+
+  {# Page-level expand/collapse-all — same control pattern as the per-memory
+     toggle on the memory page, scoped to the whole .help-sections list by
+     the .help-section-toggle handler in static/memory.js. #}
+  <div class="memory-block-controls help-controls">
+    <button type="button" class="help-section-toggle"
+            data-action="expand">Expand all sections</button>
+    <button type="button" class="help-section-toggle"
+            data-action="collapse">Collapse all sections</button>
+  </div>
+
+  {# Reuses the memory page's section machinery: top-level <details> collapsed
+     by default, sub-<details> expanded by default, stable slug anchors that
+     the anchor-expansion JS in static/memory.js auto-opens on deep links. #}
+  <div class="memory-list help-sections">
+    {% for sec in sections %}
+      <details class="memory-block help-block" id="{{ sec.slug }}">
+        <summary class="memory-block-summary">
+          <span class="memory-block-title">{{ sec.title }}</span>
+        </summary>
+        <div class="memory-block-body">
+          {% if sec.preamble %}
+            <div class="markdown-body memory-block-preamble">{{ sec.preamble | markdown }}</div>
+          {% endif %}
+          {% for sub in sec.subsections %}
+            <details class="memory-section" open id="{{ sec.slug }}--{{ sub.slug }}">
+              <summary class="memory-section-summary">{{ sub.title }}</summary>
+              <div class="markdown-body">{{ sub.content | markdown }}</div>
+            </details>
+          {% endfor %}
+        </div>
+      </details>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

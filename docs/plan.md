@@ -56,11 +56,43 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
   - The `/tag` and `/tag/bulk` write-path validation allowlists exactly the export's projects
     plus the sentinel (the brief's B1 verification found the project-set check at those two
     routes; the allowlist was extended rather than the sentinel scheme changed).
-- **Session C** — `/help` page in the nav, content adapted from the user guide.
+- **Session C** *(shipped)* — `/help` page in the nav (brief:
+  `docs/briefs/v1.1-session-c-brief.md`; verification matrix:
+  `docs/briefs/v1.1-session-c-verification.md`). Locked decisions:
+  - The help copy lives in `viewer/content/help.md`, read per request and rendered through the
+    same markdown → bleach pipeline as every other blob. Treat the copy as documentation of
+    actual behaviour (same status as the Session A search guide): it was verified
+    claim-by-claim, and the four discrepancies found were resolved as user-approved copy edits
+    recorded in the verification matrix.
+  - Page structure comes from `viewer.render.split_help_page`: only ATX `##`/`###` are
+    structural (fence-aware; `####`+ stays in content). Section anchors are
+    `<section-slug>` and `<section-slug>--<sub-slug>` via `slugify` — they are public deep-link
+    targets (`/help#tagging-and-the-triage-workflow`), keep them stable.
+  - The template reuses the memory page's section machinery wholesale (memory-block classes,
+    `static/memory.js` anchor-aware expansion). Top-level sections collapsed by default,
+    sub-sections expanded. Page-level expand/collapse-all uses `.help-section-toggle`;
+    collapse-all returns the page to its default state (sub-sections reset to open).
+  - Verify-negative tests in `tests/test_help.py` guard the public-trajectory rule at the
+    template level: no drive-letter paths, no "Dropbox", no machine usernames (checked
+    dynamically via `getpass` so nothing personal is committed). The test fixture pins
+    `Export.source_paths` to a bare filename because the footer echoes it verbatim.
 - **Session D** — artifact-encoding discovery against the real export (no app code).
 - **Session E** — setup script (Python-presence check tier).
 - **Session F** — client-side syntax highlighting via vendored highlight.js.
 - **Session G** — README rewrite, LICENSE, synthetic-fixture screenshots, tag v1.1.0.
+  Screenshot rule: screenshots must come from the synthetic fixture and must avoid or crop the
+  footer — it echoes the local source path verbatim.
+
+Small backlog (unscheduled, not part of any session above):
+
+- **Polish** — harmonise sort-toggle vocabulary across the conversations, projects, and memory
+  pages to the "Recently updated / Recently created / Title (A–Z)" pattern where semantics
+  match.
+- **Behaviour** — graceful startup on an unparseable stored export: instead of raising, fall
+  through the existing load order, surface a persistent banner, and keep the bad file in place
+  so the Upload flow (parse-before-replace) becomes the recovery path. Update the two
+  help-page troubleshooting entries ("I see sample data…" and "The app fails to start…") when
+  it ships.
 
 ## v1.2 — gate items (out of scope for v1.1)
 

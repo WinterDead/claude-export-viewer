@@ -22,7 +22,12 @@ from viewer.cache import zip_hash
 from viewer.db import get_db
 from viewer.history import all_history, record_load
 from viewer.parser import Conversation, Export, ExportFormatError, Project, load_export
-from viewer.render import compute_render_path, conversation_display_title, split_memory_sections
+from viewer.render import (
+    compute_render_path,
+    conversation_display_title,
+    split_help_page,
+    split_memory_sections,
+)
 from viewer.search import SearchHit, index_export, search
 from viewer.state import compute_tag_state, purge_orphan_tags
 from viewer.tagging import NO_PROJECT_SENTINEL, all_tags, get_tag, set_tag, tags_for_project
@@ -44,6 +49,11 @@ DEFAULT_MEMORY_SORT = "updated_desc"
 # the only public spelling — ``?tag=no-project`` maps to the sentinel
 # internally and must stay stable now that it's chosen.
 NO_PROJECT_SLUG = "no-project"
+
+# Help-page copy (v1.1 Session C). A markdown file shipped with the app — the
+# copy is editable without touching templates and flows through the same
+# markdown → bleach pipeline as every other rendered blob.
+HELP_CONTENT_PATH = Path(__file__).resolve().parent / "content" / "help.md"
 
 
 # ---------------------------------------------------------------------------
@@ -600,6 +610,25 @@ def history_view() -> str:
     startup loads of a real archive. Doubles as an archive-growth view."""
     rows = all_history(get_db())
     return render_template("history.html", rows=rows)
+
+
+# ---------------------------------------------------------------------------
+# Help page (v1.1 Session C)
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/help")
+def help_view() -> str:
+    """User guide rendered from ``viewer/content/help.md``.
+
+    The file is read per request — it's small, and this keeps the copy
+    editable without an app restart. A missing file is a true structural
+    invariant (the file ships with the app), so the read is allowed to raise
+    rather than degrade.
+    """
+    text = HELP_CONTENT_PATH.read_text(encoding="utf-8")
+    title, intro, sections = split_help_page(text)
+    return render_template("help.html", title=title, intro=intro, sections=sections)
 
 
 # ---------------------------------------------------------------------------

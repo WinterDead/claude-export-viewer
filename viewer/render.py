@@ -441,6 +441,102 @@ def split_memory_sections(body: str | None) -> list[tuple[str, str]]:
     return sections
 
 
+# ---------------------------------------------------------------------------
+# Help-page structure detection (v1.1 Session C).
+# ---------------------------------------------------------------------------
+
+
+_H1_RE = re.compile(r"^#\s+(.+?)\s*$")
+_H2_RE = re.compile(r"^##\s+(.+?)\s*$")
+_H3_RE = re.compile(r"^###\s+(.+?)\s*$")
+_FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
+
+
+def split_help_page(text: str | None) -> tuple[str, str, list[dict]]:
+    """Split the help-page markdown into ``(title, intro, sections)``.
+
+    Structure contract (Session C brief, C3):
+
+    - The first ``#`` heading is the page title.
+    - Everything above the first ``##`` (minus the title line) is the intro,
+      rendered uncollapsed at the top of the page.
+    - Each ``##`` opens a top-level section; each ``###`` inside it opens a
+      subsection. Content between a ``##`` and its first ``###`` is the
+      section's ``preamble``.
+    - ``####`` and deeper are *not* structural — they stay in the content and
+      render as ordinary markdown headings.
+    - Heading markers inside fenced code blocks are ignored.
+
+    Each section dict carries ``title``, ``slug`` (via :func:`slugify`,
+    de-duplicated with a numeric suffix so anchors stay unique), ``preamble``,
+    and ``subsections`` — a list of ``{"title", "slug", "content"}`` dicts.
+
+    Unlike :func:`split_memory_sections` this is *not* lenient about heading
+    style: help.md is authored content with strict heading discipline, not
+    Claude-written memory prose, so only ATX ``##``/``###`` are structural.
+    """
+    title = ""
+    intro_lines: list[str] = []
+    sections: list[dict] = []
+    seen_slugs: set[str] = set()
+
+    def unique_slug(heading: str) -> str:
+        base = slugify(heading)
+        slug, n = base, 2
+        while slug in seen_slugs:
+            slug = f"{base}-{n}"
+            n += 1
+        seen_slugs.add(slug)
+        return slug
+
+    current_section: dict | None = None
+    current_sub: dict | None = None
+    in_fence = False
+
+    for line in (text or "").splitlines():
+        if _FENCE_RE.match(line):
+            in_fence = not in_fence
+        if not in_fence:
+            m = _H2_RE.match(line)
+            if m:
+                current_section = {
+                    "title": m.group(1),
+                    "slug": unique_slug(m.group(1)),
+                    "preamble_lines": [],
+                    "subsections": [],
+                }
+                current_sub = None
+                sections.append(current_section)
+                continue
+            m = _H3_RE.match(line)
+            if m and current_section is not None:
+                current_sub = {
+                    "title": m.group(1),
+                    "slug": slugify(m.group(1)),
+                    "content_lines": [],
+                }
+                current_section["subsections"].append(current_sub)
+                continue
+            m = _H1_RE.match(line)
+            if m and current_section is None and not title:
+                title = m.group(1)
+                continue
+
+        if current_sub is not None:
+            current_sub["content_lines"].append(line)
+        elif current_section is not None:
+            current_section["preamble_lines"].append(line)
+        else:
+            intro_lines.append(line)
+
+    for sec in sections:
+        sec["preamble"] = "\n".join(sec.pop("preamble_lines")).strip()
+        for sub in sec["subsections"]:
+            sub["content"] = "\n".join(sub.pop("content_lines")).strip()
+
+    return title, "\n".join(intro_lines).strip(), sections
+
+
 def slugify(text: str | None) -> str:
     """Convert a section title to a fragment-id-safe slug.
 

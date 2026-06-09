@@ -59,4 +59,25 @@
       sec.open = open;
     });
   });
+
+  // Page-level expand/collapse-all for the help page (v1.1 Session C). The
+  // per-memory handler above is scoped to its own .memory-block; these two
+  // buttons act on every top-level section in .help-sections at once.
+  // Collapse returns the page to its default state — top-level sections
+  // closed, sub-sections open — so reopening a section always shows its
+  // sub-sections expanded (their default).
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".help-section-toggle");
+    if (!btn) return;
+    e.preventDefault();
+    const container = document.querySelector(".help-sections");
+    if (!container) return;
+    const open = btn.dataset.action === "expand";
+    container.querySelectorAll("details.help-block").forEach((sec) => {
+      sec.open = open;
+    });
+    container.querySelectorAll("details.memory-section").forEach((sec) => {
+      sec.open = true;
+    });
+  });
 })();

@@ -1435,6 +1435,22 @@ section h2 {
   font-size: 0.92em;
 }
 
+/* ---------- Help page (v1.1 Session C) ---------- */
+
+/* The section list reuses the memory-block machinery wholesale; only the
+   page-level control bar needs its own chrome — .memory-block-controls is
+   styled for life inside an open block (border-bottom only). */
+.help-controls {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.help-intro {
+  max-width: 70ch;
+  margin-bottom: 1.25rem;
+}
+
 /* ---------- Print stylesheet (plan §11 — grow with templates) ---------- */
 
 @media print {
@@ -1453,7 +1469,8 @@ section h2 {
   .search-form,
   .orphan-banner,
   .orphan-purge,
-  .upload-form {
+  .upload-form,
+  .help-controls {
     display: none !important;
   }
 
