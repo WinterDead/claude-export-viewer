@@ -24,8 +24,10 @@ from pathlib import Path
 from flask import Flask
 from flask_wtf.csrf import CSRFProtect
 
-from viewer.cache import load_or_build
+from viewer.cache import load_or_build, zip_hash
 from viewer.db import close_db, get_db
+from viewer.history import init_db as init_history_db
+from viewer.history import record_startup_load
 from viewer.parser import Export, load_export
 from viewer.render import (
     block_type,
@@ -34,6 +36,7 @@ from viewer.render import (
     format_local_relative,
     markdown_to_html,
     render_search_snippet,
+    sender_label,
     slugify,
     summary_preview,
 )
@@ -83,6 +86,11 @@ def create_app(
         static_folder=str(PROJECT_ROOT / "static"),
     )
 
+    # ``(filename, zip_sha256)`` when this startup load should be considered
+    # for an upload-history row — real exports only (the active zip or the
+    # dev ``data/data.zip``). Fixture and test loads record nothing.
+    startup_record: tuple[str, str] | None = None
+
     if isinstance(export_source, Export):
         export = export_source
     else:
@@ -93,7 +101,14 @@ def create_app(
         # the dev ``data/data.zip`` get parsed fresh every time, so test
         # runs and developer iteration aren't affected by stale pickles.
         if src.resolve() == ACTIVE_ZIP.resolve():
-            export = load_or_build(src, PARSE_CACHE)
+            # Hash once: the digest keys the pickle cache AND identifies the
+            # archive in the upload-history log (A3 — no second hashing).
+            sha = zip_hash(src)
+            export = load_or_build(src, PARSE_CACHE, zip_sha256=sha)
+            startup_record = (src.name, sha)
+        elif src.resolve() == REAL_EXPORT.resolve():
+            export = load_export(src)
+            startup_record = (src.name, zip_hash(src))
         else:
             export = load_export(src)
 
@@ -113,10 +128,17 @@ def create_app(
     with app.app_context():
         db = get_db()
         init_db(db)
+        init_history_db(db)
         # Build the FTS5 index from the in-memory ``Export`` (plan §12 step 6).
         # Same DB as the tagging table; transactional so route handlers never
         # see a partially-populated index.
         index_export(db, export)
+        # Startup loads of a real export are logged in the upload history —
+        # but only when the archive differs from the most recent row, so a
+        # plain relaunch doesn't duplicate the last entry (A3).
+        if startup_record is not None:
+            filename, sha = startup_record
+            record_startup_load(db, filename=filename, zip_sha256=sha, export=export)
 
     app.jinja_env.filters["markdown"] = markdown_to_html
     app.jinja_env.filters["format_local"] = format_local
@@ -126,6 +148,7 @@ def create_app(
     app.jinja_env.filters["summary_preview"] = summary_preview
     app.jinja_env.filters["search_snippet"] = render_search_snippet
     app.jinja_env.filters["slugify"] = slugify
+    app.jinja_env.filters["sender_label"] = sender_label
 
     # Inject only the small dict the layout chrome needs — never the full
     # ``Export`` or ``User`` objects. Otherwise a careless ``{{ export }}``

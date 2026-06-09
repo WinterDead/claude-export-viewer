@@ -346,6 +346,21 @@ section h2 {
   color: white;
 }
 
+.badge-source-upload {
+  background: var(--link);
+  color: white;
+}
+
+.badge-source-startup {
+  background: var(--muted);
+  color: white;
+}
+
+.badge-source-unknown {
+  background: var(--accent);
+  color: white;
+}
+
 /* Project detail */
 
 .project-header h1 {
@@ -642,7 +657,6 @@ section h2 {
 
 .msg-sender {
   font-weight: 600;
-  text-transform: lowercase;
   letter-spacing: 0.02em;
 }
 
@@ -1040,6 +1054,81 @@ section h2 {
   font-size: 0.92em;
 }
 
+/* Collapsed syntax guide beneath the search input — same collapsible
+   treatment as .thinking blocks. */
+.syntax-guide {
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  background: #fafafa;
+  max-width: 75ch;
+  margin: 0.75rem 0 1.5rem;
+}
+
+.syntax-guide > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.syntax-guide-body {
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+}
+
+.syntax-guide-body p {
+  margin: 0.75em 0;
+}
+
+.syntax-guide-body ul {
+  margin: 0.5em 0;
+  padding-left: 1.4rem;
+}
+
+.syntax-guide-body li {
+  margin: 0.35em 0;
+}
+
+.syntax-guide code {
+  background: var(--code-bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.92em;
+}
+
+/* ---------- Upload history ---------- */
+
+.history-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.92rem;
+}
+
+.history-table th,
+.history-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  vertical-align: baseline;
+}
+
+.history-table th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.history-table .history-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-sha {
+  background: var(--code-bg);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.88em;
+}
+
 .search-section {
   margin-top: 2rem;
 }
@@ -1136,7 +1225,6 @@ section h2 {
 
 .search-message-sender {
   font-weight: 600;
-  text-transform: lowercase;
   letter-spacing: 0.02em;
 }
 

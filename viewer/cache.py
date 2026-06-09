@@ -53,14 +53,18 @@ def zip_hash(zip_path: Path) -> str:
     return _sha256_file(zip_path)
 
 
-def load_or_build(zip_path: Path, pickle_path: Path) -> Export:
+def load_or_build(zip_path: Path, pickle_path: Path, *, zip_sha256: str | None = None) -> Export:
     """Return the parsed ``Export`` for ``zip_path``, using the on-disk
     pickle cache when its key matches, otherwise re-parsing and rewriting.
+
+    ``zip_sha256`` lets a caller that has already hashed the zip (e.g. to
+    record the upload-history row) share the digest instead of hashing the
+    file a second time.
 
     The pickle file is written atomically via a tempfile-rename to avoid
     leaving a half-written cache on a process kill mid-write.
     """
-    expected_key = (zip_hash(zip_path), parser_module_hash())
+    expected_key = (zip_sha256 or zip_hash(zip_path), parser_module_hash())
 
     if pickle_path.is_file():
         try:

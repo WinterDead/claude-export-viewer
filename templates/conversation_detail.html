@@ -67,7 +67,7 @@
                 <li>
                   {% if sib.is_active %}
                     <span class="branch-option active" aria-current="true">
-                      {{ loop.index }}. {{ sib.msg.sender }}
+                      {{ loop.index }}. {{ sib.msg.sender | sender_label }}
                       <span class="branch-time">
                         {{ sib.msg.created_at | format_local_relative }}
                       </span>
@@ -78,7 +78,7 @@
                        href="{{ url_for('viewer.conversation_detail',
                                        uuid=conv.uuid,
                                        branch=sib.branch_args) }}">
-                      {{ loop.index }}. {{ sib.msg.sender }}
+                      {{ loop.index }}. {{ sib.msg.sender | sender_label }}
                       <span class="branch-time">
                         {{ sib.msg.created_at | format_local_relative }}
                       </span>

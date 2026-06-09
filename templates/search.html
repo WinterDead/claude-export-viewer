@@ -25,15 +25,92 @@
     <button type="submit" class="search-submit">Search</button>
   </form>
 
+  <p class="search-hint">
+    Just type what you're looking for — punctuation, apostrophes, and hyphens are
+    handled automatically. For advanced operators, open the syntax guide below.
+  </p>
+
+  {# Present in all three page states (empty query, results, syntax error) —
+     the error state is where it's needed most. Native <details>, no JS. #}
+  <details class="syntax-guide">
+    <summary>Search syntax guide</summary>
+    <div class="syntax-guide-body">
+      <p>
+        <strong>The default: plain words.</strong> Type words like you would in any
+        search box: <code>flask sqlite tagging</code>. Every word must appear somewhere
+        in the result, but not necessarily together or in order. Punctuation is safe —
+        <code>don't</code>, <code>B.Sc.</code>, and <code>covid-19</code> all work as-is.
+      </p>
+      <p>
+        <strong>"Exact phrase" — words together, in order.</strong> Wrap words in double
+        quotes to match them as a unit. <code>"branch point"</code> finds only places
+        where those two words sit side by side; without quotes, they could be paragraphs
+        apart.<br>
+        Example: <code>"upload history"</code> — matches the phrase, not scattered
+        mentions of uploads and history.
+      </p>
+      <p>
+        <strong>prefix* — match the start of a word.</strong> Put an asterisk at the end
+        of a word stem to match every word beginning with it.<br>
+        Example: <code>electr*</code> matches electric, electrical, electronics,
+        electron.<br>
+        The asterisk only works at the end of a word — <code>*lectric</code> won't.
+      </p>
+      <p>
+        <strong>NEAR(a b, N) — words close together, any order.</strong> Matches when
+        the terms appear within N words of each other, in either order. Useful when you
+        remember the concept but not the phrasing.<br>
+        Example: <code>NEAR(memory project, 8)</code> matches "project memory," "memory
+        for this project," and similar.<br>
+        If you leave off the number — <code>NEAR(memory project)</code> — the distance
+        defaults to 10.
+      </p>
+      <p>
+        <strong>AND, OR, NOT — combining and excluding.</strong> These must be
+        uppercase; lowercase and/or/not are treated as ordinary search words.
+      </p>
+      <ul>
+        <li>
+          <code>flask AND sqlite</code> — both must appear. (This is already the
+          default between plain words.)
+        </li>
+        <li><code>flask OR fastapi</code> — either one is enough.</li>
+        <li>
+          <code>python NOT snake</code> — has python, doesn't have snake. NOT sits
+          between two terms. There is no leading-minus exclusion —
+          <code>-snake</code> is treated as an ordinary word, which is why searches
+          like <code>covid-19</code> keep working.
+        </li>
+      </ul>
+      <p>
+        <strong>( … ) — grouping.</strong> Parentheses make combinations unambiguous.<br>
+        Example: <code>(flask OR fastapi) AND sqlite</code> — sqlite, plus at least one
+        of the two frameworks.
+      </p>
+      <p>
+        <strong>Mixing operators with ordinary words.</strong> The moment a query
+        contains any operator, the whole query switches to strict syntax mode —
+        punctuation is no longer handled for you. Quote anything with apostrophes,
+        periods, or hyphens:<br>
+        <code>"B.Sc." AND engineering</code> works; <code>B.Sc. AND engineering</code>
+        is a syntax error.
+      </p>
+      <p>
+        <strong>Putting it together.</strong>
+        <code>("export viewer" OR archive) NOT readme</code> — finds export-viewer or
+        archive content while skipping anything that mentions readme. When combining
+        different operators, use parentheses rather than relying on precedence rules.
+      </p>
+      <p>
+        <strong>What's searched:</strong> conversation titles and summaries, every
+        message (including messages on alternate branches), project names and
+        descriptions, knowledge documents, and all memory blobs.
+      </p>
+    </div>
+  </details>
+
   {% if not query %}
-    <p class="search-hint">
-      Just type — punctuation, apostrophes, and hyphens are handled for you.
-      For finer control: <code>"exact phrases"</code>,
-      <code>prefix*</code> matches,
-      <code>NEAR(a b, 5)</code> for proximity, or
-      <code>AND</code> / <code>OR</code> / <code>NOT</code> to combine or
-      exclude terms.
-    </p>
+    {# Empty-query state: the tip and syntax guide above are the whole page. #}
   {% elif results.error %}
     <p class="warn">{{ results.error }}</p>
   {% elif results.total == 0 %}
@@ -78,7 +155,7 @@
                                     ~ '#msg-' ~ m.msg.uuid %}
                     {% endif %}
                     <a href="{{ href }}" class="search-message-link">
-                      <span class="search-message-sender">{{ m.msg.sender }}</span>
+                      <span class="search-message-sender">{{ m.msg.sender | sender_label }}</span>
                       <span class="search-message-time">
                         {{ m.msg.created_at | format_local_relative }}
                       </span>

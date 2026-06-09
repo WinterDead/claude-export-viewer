@@ -4,7 +4,8 @@ Local Python web app for reading Claude.ai data exports (the zipped JSON archive
 
 ## Status
 
-Greenfield. No code yet. First-session goal is to inspect a real export ZIP and design the data model from ground truth, not from assumptions about format.
+v1.0.0 shipped (feature-complete viewer). v1.1 in progress — see `docs/plan.md` for the roadmap
+and per-session briefs under `docs/briefs/`.
 
 ## Constraints
 
@@ -23,6 +24,27 @@ Greenfield. No code yet. First-session goal is to inspect a real export ZIP and 
 - `pytest` for tests; the parser module is the priority for test coverage. The UI does not need tests.
 - Commits authored as "WinterDead"
 - **Preserve and flag, don't silently drop.** When the parser meets unexpected data (unknown enum values, references to missing entities, structural surprises), preserve it on the result — in a typed slot if one exists, or an "orphan" collection on the parent — and log a `WARNING` naming what was preserved. Let the renderer decide whether to surface it. Reserve raising for true structural invariants (a required file is missing, a list-of-1 contains zero or two records). The export has no version markers and may shift; preserve-and-flag is what keeps the viewer working through small format changes. Existing examples to follow: unknown content-block types, orphan `parent_message_uuid`, parent-graph cycles, dangling project memories, unknown sender values, account-uuid mismatches, non-zero batch index in isolation.
+
+## Public-repo trajectory
+
+The repo goes public around v1.2. From now on: all user-facing text, documentation, and fixtures
+are written for a general audience, not just the original developer. No personal file paths,
+usernames, machine names, or real export data in anything committed. Screenshots, when needed,
+come only from the synthetic fixture, never from a real export.
+
+## Session-end checklist
+
+At the end of every session:
+
+1. Run the full test suite; all tests pass.
+2. Run ruff and black; both clean.
+3. `git status` — review everything staged or untracked.
+4. Privacy grep on staged files before committing:
+   `git diff --cached --name-only | Select-String -Pattern "(data/|cache/|sqlite|venv|secret|token|api[_-]?key|\.env|password|credential)"`
+   If it returns anything, stop and fix `.gitignore` before committing.
+5. Commit with a descriptive message. Do not leave sessions uncommitted.
+6. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
+   obsolete detail.
 
 ## Proposed structure (finalize after inspecting the export)
 

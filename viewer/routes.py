@@ -18,7 +18,9 @@ from pathlib import Path
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
 from viewer.cache import invalidate as invalidate_cache
+from viewer.cache import zip_hash
 from viewer.db import get_db
+from viewer.history import all_history, record_load
 from viewer.parser import Conversation, Export, ExportFormatError, Project, load_export
 from viewer.render import compute_render_path, conversation_display_title, split_memory_sections
 from viewer.search import SearchHit, index_export, search
@@ -540,6 +542,10 @@ def upload_post():
         tmp.unlink(missing_ok=True)
         return render_template("upload.html", error=f"Couldn't parse archive: {e}"), 400
 
+    # Hash once, before the move — the same digest that keys the pickle
+    # cache, reused for the upload-history row below (A3).
+    new_sha = zip_hash(tmp)
+
     # Commit: move tempfile into place, drop the stale parse cache, swap
     # in-memory Export, rebuild the search index. Order matters — Export
     # swap last, so a route in flight either sees the old or the new fully.
@@ -550,7 +556,30 @@ def upload_post():
     index_export(db, new_export)
     current_app.config["EXPORT"] = new_export
 
+    # Record after the swap succeeded. Uploads always record, even when the
+    # sha matches an earlier row — an explicit user action is worth logging.
+    record_load(
+        db,
+        source="upload",
+        filename=file.filename,
+        zip_sha256=new_sha,
+        export=new_export,
+    )
+
     return redirect(url_for("viewer.index"))
+
+
+# ---------------------------------------------------------------------------
+# Upload history (v1.1 Session A, item A3)
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/history")
+def history_view() -> str:
+    """Reverse-chronological log of every export load — uploads and
+    startup loads of a real archive. Doubles as an archive-growth view."""
+    rows = all_history(get_db())
+    return render_template("history.html", rows=rows)
 
 
 # ---------------------------------------------------------------------------

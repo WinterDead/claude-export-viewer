@@ -6,7 +6,7 @@
    Artifacts, nested tool_result, and Pygments syntax highlighting are deferred. #}
 <article class="msg msg-{{ msg.sender }}" id="msg-{{ msg.uuid }}">
   <header class="msg-header">
-    <span class="msg-sender">{{ msg.sender }}</span>
+    <span class="msg-sender">{{ msg.sender | sender_label }}</span>
     <span aria-hidden="true"> · </span>
     <time title="{{ msg.created_at | format_local }}" datetime="{{ msg.created_at }}">
       {{ msg.created_at | format_local_relative }}

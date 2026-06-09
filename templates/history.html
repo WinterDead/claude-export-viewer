@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}History — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="history-page">
+  <header class="page-header">
+    <h1>Upload history</h1>
+    <p class="lede">
+      Every export loaded into the viewer — when, from where, and how much it
+      contained.
+    </p>
+  </header>
+
+  {% if not rows %}
+    <p class="empty">No uploads recorded yet.</p>
+  {% else %}
+    <table class="history-table">
+      <thead>
+        <tr>
+          <th scope="col">When</th>
+          <th scope="col">Source</th>
+          <th scope="col">File</th>
+          <th scope="col" class="history-num">Conversations</th>
+          <th scope="col" class="history-num">Messages</th>
+          <th scope="col" class="history-num">Projects</th>
+          <th scope="col" class="history-num">Project memories</th>
+          <th scope="col">SHA-256</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td>
+              {% if row.recorded_at %}
+                <span title="{{ row.recorded_at | format_local }}">
+                  {{ row.recorded_at | format_local_relative }}
+                </span>
+              {% else %}
+                {# Preserve-and-flag: timestamp didn't parse; show the raw value. #}
+                <span title="{{ row.recorded_at_raw }}">—</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if row.source == 'upload' %}
+                <span class="badge badge-source-upload">Upload</span>
+              {% elif row.source == 'startup' %}
+                <span class="badge badge-source-startup">Startup</span>
+              {% else %}
+                {# Preserve-and-flag: unknown source values render as-is. #}
+                <span class="badge badge-source-unknown">{{ row.source }}</span>
+              {% endif %}
+            </td>
+            <td><code>{{ row.filename }}</code></td>
+            <td class="history-num">{{ row.conversations }}</td>
+            <td class="history-num">{{ row.messages }}</td>
+            <td class="history-num">{{ row.projects }}</td>
+            <td class="history-num">{{ row.project_memories }}</td>
+            <td>
+              <code class="history-sha" title="{{ row.zip_sha256 }}">{{ row.zip_sha256[:12] }}</code>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

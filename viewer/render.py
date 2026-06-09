@@ -177,6 +177,26 @@ def summary_preview(text: str | None, max_chars: int = _SUMMARY_PREVIEW_MAX_CHAR
     return plain
 
 
+# Display labels for message senders (v1.1 Session A). Inputs aren't
+# necessarily from a human — agentic pipelines and dual-terminal workflows
+# also drive the "human" side — so the accurate label is "User". Display
+# layer only: the parser's raw ``sender`` values, the FTS index, and the
+# pickle cache are untouched.
+_SENDER_LABELS = {"human": "User", "assistant": "Assistant"}
+
+
+def sender_label(sender: str | None) -> str:
+    """Map a raw parser ``sender`` value to its user-facing label.
+
+    Unknown senders pass through unchanged (preserve-and-flag: the parser
+    already logged a warning at parse time; the renderer surfaces the raw
+    value rather than hiding it behind a wrong label).
+    """
+    if not sender:
+        return ""
+    return _SENDER_LABELS.get(sender, sender)
+
+
 def format_local(ts: datetime | None) -> str:
     """Render a datetime in the system's local timezone.
 
