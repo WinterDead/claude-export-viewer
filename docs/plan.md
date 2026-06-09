@@ -93,7 +93,23 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
     branch semantics (three candidate rules in the doc) deliberately left undecided.
   - `tools/scan_artifacts.py` committed as a generic re-check utility (stdlib-only,
     aggregate-only output) for the next time the export format shifts.
-- **Session E** — setup script (Python-presence check tier).
+- **Session E** *(shipped)* — double-clickable launcher scripts (brief:
+  `docs/briefs/v1.1-session-e-brief.md`; verification matrix:
+  `docs/briefs/v1.1-session-e-verification.md`). Locked decisions:
+  - Script names: `run.ps1` (the real Windows logic), `run.bat` (one-line shim invoking
+    PowerShell with a per-invocation `-ExecutionPolicy Bypass`, plus `|| pause` so a
+    double-clicked window stays open on failure), `run.sh` (bash, macOS/Linux) — all at the
+    project root.
+  - Port-fallback list is `5000, 5050, 5051, 5052`; the chosen port is printed when it isn't
+    the default, and all-busy exits with the manual `--port` instruction.
+  - No-system-changes constraint: the scripts never touch anything outside the project folder —
+    no PATH edits, no policy changes, no installs beyond the local `.venv`; a missing/too-old/
+    Store-stub Python gets a friendly message pointing at python.org, never an auto-install.
+  - Install step is import-probed (`import flask, flask_wtf, markdown, bleach`), so a run with
+    a healthy venv skips pip entirely and a half-finished first install self-heals.
+  - `.gitattributes` pins `run.sh` to LF (and the Windows scripts to CRLF) against
+    `core.autocrlf`; `tests/test_launchers.py` guards file presence, the shim wiring, and the
+    public-trajectory verify-negatives.
 - **Session F** — client-side syntax highlighting via vendored highlight.js.
 - **Session G** — README rewrite, LICENSE, synthetic-fixture screenshots, tag v1.1.0.
   Screenshot rule: screenshots must come from the synthetic fixture and must avoid or crop the
@@ -103,7 +119,9 @@ Small backlog (unscheduled, not part of any session above):
 
 - **Polish** — harmonise sort-toggle vocabulary across the conversations, projects, and memory
   pages to the "Recently updated / Recently created / Title (A–Z)" pattern where semantics
-  match.
+  match. Same pass: reconcile the "Prompt template" label (project-detail UI) with "custom
+  instructions" (help copy, matching Claude.ai's product term) — surfaced in the Session C
+  verification matrix.
 - **Behaviour** — graceful startup on an unparseable stored export: instead of raising, fall
   through the existing load order, surface a persistent banner, and keep the bad file in place
   so the Upload flow (parse-before-replace) becomes the recovery path. Update the two
@@ -119,3 +137,8 @@ Small backlog (unscheduled, not part of any session above):
   content in the placeholder cards, per-artifact download named from `title`/`type`,
   preserve-and-flag for unobserved commands. Requires a decision on branch semantics (three
   candidate rules in the doc) before implementation.
+- **File-tools discovery pass** (planning input for archive recovery). Mirror Session D's
+  method against `create_file` / `str_replace` (and related file-tool) calls in the export:
+  their inputs carry full file bodies and now outnumber artifact calls several-fold, so they
+  may matter more than artifacts for recovering work from the archive. `tools/scan_artifacts.py`
+  is the starting point to generalise into a scanner for these tool names.

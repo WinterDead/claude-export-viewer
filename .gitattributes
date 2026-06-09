@@ -1,0 +1,5 @@
+# Launcher scripts: pin line endings so a Windows checkout (autocrlf) cannot
+# hand a CRLF run.sh to bash, and the Windows-native scripts stay CRLF.
+run.sh text eol=lf
+run.bat text eol=crlf
+run.ps1 text eol=crlf

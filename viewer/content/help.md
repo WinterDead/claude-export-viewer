@@ -151,7 +151,7 @@ They almost certainly didn't — they've gone orphaned because the new export is
 
 ### Port 5000 is already in use
 
-Something else on your machine is using the default port. Start the app on another one: `flask --app app run --port 5050`.
+Something else on your machine is using the default port. The launcher script handles this automatically — it picks the next free port and prints the address. If you start the app manually instead, choose another port: `flask --app app run --port 5050`.
 
 ### A page shows stale content
 

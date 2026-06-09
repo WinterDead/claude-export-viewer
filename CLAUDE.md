@@ -42,8 +42,13 @@ At the end of every session:
 4. Privacy grep on staged files before committing:
    `git diff --cached --name-only | Select-String -Pattern "(data/|cache/|sqlite|venv|secret|token|api[_-]?key|\.env|password|credential)"`
    If it returns anything, stop and fix `.gitignore` before committing.
-5. Commit with a descriptive message. Do not leave sessions uncommitted.
-6. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
+5. If the session read the real export's *content* (not just metadata), additionally grep the
+   staged **diff content** for leak patterns before committing:
+   `git diff --cached | Select-String -Pattern "(conversations\.json|projects\.json|users\.json|memor(y|ies)|uuid)"`
+   and eyeball every hit — the point is to catch real conversation text, titles, or identifiers
+   that slipped into docs, fixtures, or comments. Filenames alone (step 4) don't catch this.
+6. Commit with a descriptive message. Do not leave sessions uncommitted.
+7. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
    obsolete detail.
 
 ## Proposed structure (finalize after inspecting the export)

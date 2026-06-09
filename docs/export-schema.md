@@ -279,6 +279,12 @@ artifact call has the shape:
 
 This is what a "download artifacts" feature must extract.
 
+> **Superseded for artifact blocks.** The example above predates the v1.1 Session D discovery
+> pass and carries pre-discovery guesses (a null `source`, an empty `md_citations`). The
+> authoritative description of artifact blocks — observed commands, null block-level ids and
+> positional pairing, `md_citations` carrying real offsets, the truncation and reconstruction
+> verdicts — is `docs/artifact-encoding.md`.
+
 **MCP namespacing**: tool names of the form `<server>:<tool>` (e.g. `Claude in Chrome:computer`)
 indicate MCP tools. The colon is the separator. The parser stores the full name verbatim;
 splitting is a render-time concern.
