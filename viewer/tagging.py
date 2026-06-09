@@ -19,6 +19,15 @@ from __future__ import annotations
 import sqlite3
 from datetime import UTC, datetime
 
+# "No Project" sentinel (v1.1 Session B). Tagging a conversation to this value
+# means "reviewed, and confirmed to belong to no project" — distinct from
+# untagged (no row at all), which means "not yet reviewed". Deliberately NOT a
+# UUID: the synthetic fixtures use all-zero and all-``a`` UUIDs, so a reserved
+# UUID could collide with a real project or a fixture; this string never can.
+# Stored in ``conversation_project`` exactly like any other tag.
+NO_PROJECT_SENTINEL = "__no_project__"
+NO_PROJECT_LABEL = "No Project"
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS conversation_project (
     conversation_uuid TEXT PRIMARY KEY,

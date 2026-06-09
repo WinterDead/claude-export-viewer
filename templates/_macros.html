@@ -64,7 +64,13 @@
      project_uuid that's no longer in the current Export. The dropdown
      surfaces it as a ``(Orphan: <uuid>)`` option so the user can retag or
      clear, instead of silently rendering as "(Untagged)" — that would lose
-     information and look like a bug. #}
+     information and look like a bug.
+
+     "No Project" (v1.1 Session B) is the first project option, ahead of the
+     real projects and styled apart from "(Untagged)": clearing returns a
+     conversation to not-yet-reviewed, No Project records reviewed-and-
+     deliberately-project-less. With the sentinel always present the select
+     always has an actionable option, so it's never disabled. #}
   <form method="post" action="{{ url_for('viewer.tag_conversation') }}" class="tag-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="conversation_uuid" value="{{ conv_uuid }}">
@@ -72,14 +78,17 @@
     <label class="tag-form-label">
       <span class="tag-form-text">{{ label }}:</span>
       <select name="project_uuid" class="tag-form-select"
-              onchange="this.form.submit()"
-              {% if not projects and not current_tag_orphan %}disabled{% endif %}>
+              onchange="this.form.submit()">
         <option value="" {% if not current_tag %}selected{% endif %}>(Untagged)</option>
         {% if current_tag_orphan %}
           <option value="{{ current_tag }}" selected class="tag-form-orphan">
             (Orphan: {{ current_tag }})
           </option>
         {% endif %}
+        <option value="{{ NO_PROJECT_SENTINEL }}" class="tag-form-no-project"
+                {% if current_tag == NO_PROJECT_SENTINEL %}selected{% endif %}>
+          {{ NO_PROJECT_LABEL }}
+        </option>
         {% for p in projects %}
           <option value="{{ p.uuid }}"
                   {% if p.uuid == current_tag and not current_tag_orphan %}selected{% endif %}>

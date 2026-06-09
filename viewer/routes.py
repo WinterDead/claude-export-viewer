@@ -25,7 +25,7 @@ from viewer.parser import Conversation, Export, ExportFormatError, Project, load
 from viewer.render import compute_render_path, conversation_display_title, split_memory_sections
 from viewer.search import SearchHit, index_export, search
 from viewer.state import compute_tag_state, purge_orphan_tags
-from viewer.tagging import all_tags, get_tag, set_tag, tags_for_project
+from viewer.tagging import NO_PROJECT_SENTINEL, all_tags, get_tag, set_tag, tags_for_project
 
 bp = Blueprint("viewer", __name__)
 
@@ -39,6 +39,11 @@ DEFAULT_PROJECT_SORT = "updated_desc"
 
 MEMORY_SORT_OPTIONS: tuple[str, ...] = ("updated_desc", "name_asc", "created_desc")
 DEFAULT_MEMORY_SORT = "updated_desc"
+
+# Readable URL slug for the "No Project" filter (v1.1 Session B). The slug is
+# the only public spelling — ``?tag=no-project`` maps to the sentinel
+# internally and must stay stable now that it's chosen.
+NO_PROJECT_SLUG = "no-project"
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +74,8 @@ def _filter_conversations_by_tag(
     """Apply the ``?tag=`` filter on the conversation list.
 
     ``None`` → no filter. ``"untagged"`` → conversations with no row in
-    ``conversation_project``. ``<project_uuid>`` → tagged to that project.
+    ``conversation_project``. ``<project_uuid>`` (or the No-Project sentinel,
+    already mapped from its URL slug by the route) → tagged to that value.
     Unknown values fall through to "no filter" (route-level fallback).
     """
     if tag is None:
@@ -143,14 +149,19 @@ def conversation_list() -> str:
     valid_filter = (
         tag_filter is None
         or tag_filter == "untagged"
+        or tag_filter == NO_PROJECT_SLUG
         or any(p.uuid == tag_filter for p in export.projects)
     )
     if not valid_filter:
         tag_filter = None
 
+    # The slug is the URL spelling; the sentinel is what's stored. Templates
+    # keep seeing the slug (links round-trip), the filter sees the sentinel.
+    internal_filter = NO_PROJECT_SENTINEL if tag_filter == NO_PROJECT_SLUG else tag_filter
+
     # Filtering uses live tags only — orphan-project tags don't match a real
     # project so they shouldn't satisfy a "Tagged: <Project>" filter anyway.
-    filtered = _filter_conversations_by_tag(export.conversations, tag_filter, state.live)
+    filtered = _filter_conversations_by_tag(export.conversations, internal_filter, state.live)
     conversations = _sort_conversations(filtered, sort)
 
     projects_sorted = sorted(export.projects, key=lambda p: p.name.lower())
@@ -184,7 +195,12 @@ def conversation_detail(uuid: str) -> str:
     db = get_db()
     current_tag = get_tag(db, uuid)
     project_uuids = {p.uuid for p in export.projects}
-    current_tag_orphan = bool(current_tag) and current_tag not in project_uuids
+    # The No-Project sentinel always "exists" — never orphan-flag it.
+    current_tag_orphan = (
+        bool(current_tag)
+        and current_tag != NO_PROJECT_SENTINEL
+        and current_tag not in project_uuids
+    )
     projects_sorted = sorted(export.projects, key=lambda p: p.name.lower())
 
     return render_template(
@@ -255,8 +271,12 @@ def project_list() -> str:
 
 
 @bp.route("/projects/<uuid>")
-def project_detail(uuid: str) -> str:
+def project_detail(uuid: str):
     export: Export = current_app.config["EXPORT"]
+    # The No-Project sentinel has no detail page — its "contents" are the
+    # filtered conversations list, so send the request there instead of 404ing.
+    if uuid == NO_PROJECT_SENTINEL:
+        return redirect(url_for("viewer.conversation_list", tag=NO_PROJECT_SLUG))
     project = next((p for p in export.projects if p.uuid == uuid), None)
     if project is None:
         abort(404)
@@ -601,12 +621,15 @@ def orphans_view() -> str:
 
     # Resolve what we can: orphan-conv rows have a project that may still
     # exist (show project name); orphan-project rows have a conv that
-    # exists (show conv title).
+    # exists (show conv title). A sentinel row here is orphaned only on the
+    # conversation dimension — the sentinel "project" exists by definition,
+    # so it must never get the "project also missing" treatment.
     orphan_conv_rows = [
         {
             "conversation_uuid": cuid,
             "project_uuid": puid,
             "project": project_by_uuid.get(puid),
+            "is_sentinel": puid == NO_PROJECT_SENTINEL,
         }
         for cuid, puid in sorted(state.orphan_conv.items())
     ]
@@ -657,7 +680,13 @@ def tag_conversation():
         abort(400, "missing conversation_uuid")
     if not any(c.uuid == conv_uuid for c in export.conversations):
         abort(404, f"unknown conversation {conv_uuid}")
-    if project_uuid is not None and not any(p.uuid == project_uuid for p in export.projects):
+    # Valid targets: a project in the current export, or the No-Project
+    # sentinel — the one non-project value the dropdowns offer.
+    if (
+        project_uuid is not None
+        and project_uuid != NO_PROJECT_SENTINEL
+        and not any(p.uuid == project_uuid for p in export.projects)
+    ):
         abort(400, f"unknown project {project_uuid}")
 
     set_tag(get_db(), conv_uuid, project_uuid)
@@ -697,7 +726,11 @@ def tag_bulk():
         project_uuid = request.form.get("project_uuid", "").strip()
         if not project_uuid:
             abort(400, "missing project_uuid")
-        if not any(p.uuid == project_uuid for p in export.projects):
+        # Same target rule as the single-tag route: export projects plus the
+        # No-Project sentinel.
+        if project_uuid != NO_PROJECT_SENTINEL and not any(
+            p.uuid == project_uuid for p in export.projects
+        ):
             abort(404, f"unknown project {project_uuid}")
         if mode == "tag":
             # Skip rows that already have a tag — friendlier on initial sweep.

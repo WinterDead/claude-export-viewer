@@ -43,6 +43,10 @@
                     <a href="{{ url_for('viewer.project_detail', uuid=row.project.uuid) }}">
                       {{ row.project.name }}
                     </a>
+                  {% elif row.is_sentinel %}
+                    {# The sentinel "project" always exists — orphaned on the
+                       conversation dimension only, so no missing-project flag. #}
+                    <span class="tag-form-no-project">{{ NO_PROJECT_LABEL }}</span>
                   {% else %}
                     <code>{{ row.project_uuid }}</code>
                     <span class="orphan-tag-flag">project also missing</span>

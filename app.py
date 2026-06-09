@@ -43,7 +43,7 @@ from viewer.render import (
 from viewer.routes import UPLOAD_MAX_BYTES, bp
 from viewer.search import index_export
 from viewer.state import compute_tag_state
-from viewer.tagging import init_db
+from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, init_db
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 CACHE_DIR = PROJECT_ROOT / "cache"
@@ -149,6 +149,12 @@ def create_app(
     app.jinja_env.filters["search_snippet"] = render_search_snippet
     app.jinja_env.filters["slugify"] = slugify
     app.jinja_env.filters["sender_label"] = sender_label
+
+    # No-Project sentinel (v1.1 Session B): templates render the option value
+    # and label from the same constants the tagging layer defines, so the
+    # sentinel is spelled in exactly one place.
+    app.jinja_env.globals["NO_PROJECT_SENTINEL"] = NO_PROJECT_SENTINEL
+    app.jinja_env.globals["NO_PROJECT_LABEL"] = NO_PROJECT_LABEL
 
     # Inject only the small dict the layout chrome needs — never the full
     # ``Export`` or ``User`` objects. Otherwise a careless ``{{ export }}``

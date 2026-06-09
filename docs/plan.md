@@ -38,7 +38,24 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
     Recorded after successful parse only: uploads always; startup loads of a real export only
     when the sha differs from the latest row; fixture loads never. The `zip_sha256` is the same
     digest that keys the pickle cache, hashed once per flow.
-- **Session B** — "No Project" sentinel tag (design settled in chat; spec to follow).
+- **Session B** *(shipped)* — "No Project" sentinel tag (brief:
+  `docs/briefs/v1.1-session-b-brief.md`; verification matrix:
+  `docs/briefs/v1.1-session-b-verification.md`). Locked decisions:
+  - Sentinel value is `__no_project__` (`viewer.tagging.NO_PROJECT_SENTINEL`), display label
+    **"No Project"** (`NO_PROJECT_LABEL`). Deliberately not a UUID so it can never collide with
+    a real project or a fixture UUID. Stored in `conversation_project` like any other tag — no
+    schema change.
+  - URL slug is `no-project` (`viewer.routes.NO_PROJECT_SLUG`); `?tag=no-project` is the only
+    public spelling and maps to the sentinel internally. Keep it stable.
+  - Orphan-semantics split: orphan-conversation detection still applies to sentinel rows (a
+    sentinel row whose conversation is missing is orphan-conv, purgeable, never badged
+    "project also missing"), but orphan-project detection never does — the sentinel "project"
+    exists by definition, so sentinel rows on live conversations are bucket `live`.
+  - The sentinel never appears on `/projects` or in home stats; its project-detail URL
+    redirects to `/conversations?tag=no-project`.
+  - The `/tag` and `/tag/bulk` write-path validation allowlists exactly the export's projects
+    plus the sentinel (the brief's B1 verification found the project-set check at those two
+    routes; the allowlist was extended rather than the sentinel scheme changed).
 - **Session C** — `/help` page in the nav, content adapted from the user guide.
 - **Session D** — artifact-encoding discovery against the real export (no app code).
 - **Session E** — setup script (Python-presence check tier).

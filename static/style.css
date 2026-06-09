@@ -1376,6 +1376,12 @@ section h2 {
   font-style: italic;
 }
 
+/* "No Project" sentinel option/label — italic sets it apart from real project
+   names and from the parenthesised "(Untagged)" clear option. */
+.tag-form-no-project {
+  font-style: italic;
+}
+
 .upload-form {
   display: flex;
   flex-direction: column;

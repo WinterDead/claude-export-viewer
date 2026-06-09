@@ -30,6 +30,9 @@
     <span class="bulk-already-tagged" data-count="0" hidden></span>
     <select name="project_uuid" class="bulk-project-picker" aria-label="Pick a project">
       <option value="">Pick a project…</option>
+      <option value="{{ NO_PROJECT_SENTINEL }}" class="tag-form-no-project">
+        {{ NO_PROJECT_LABEL }}
+      </option>
       {% for p in projects %}
         <option value="{{ p.uuid }}">{{ p.name }}</option>
       {% endfor %}
@@ -70,6 +73,9 @@
         <select name="tag" onchange="this.form.submit()" class="tag-filter-select">
           <option value="" {% if not tag_filter %}selected{% endif %}>All conversations</option>
           <option value="untagged" {% if tag_filter == 'untagged' %}selected{% endif %}>Untagged</option>
+          <option value="no-project" {% if tag_filter == 'no-project' %}selected{% endif %}>
+            {{ NO_PROJECT_LABEL }}
+          </option>
           {% for p in projects %}
             <option value="{{ p.uuid }}" {% if tag_filter == p.uuid %}selected{% endif %}>
               Tagged: {{ p.name }}
@@ -85,6 +91,8 @@
   {% if not conversations %}
     {% if tag_filter == 'untagged' %}
       <p class="empty">All conversations are tagged. Nothing to do here.</p>
+    {% elif tag_filter == 'no-project' %}
+      <p class="empty">No conversations marked {{ NO_PROJECT_LABEL }} yet.</p>
     {% elif tag_filter %}
       <p class="empty">No conversations tagged to this project yet.</p>
     {% else %}

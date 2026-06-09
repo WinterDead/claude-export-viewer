@@ -12,6 +12,13 @@ re-import, two preserve-and-flag categories surface:
   tagged to no longer does. The conv-detail dropdown surfaces this case so
   the user can retag or clear.
 
+The "No Project" sentinel (:data:`viewer.tagging.NO_PROJECT_SENTINEL`) splits
+the two orphan dimensions: orphan-project detection never applies to it (the
+sentinel "project" exists by definition, so sentinel rows on live
+conversations are bucket ``live``), but orphan-conversation detection still
+does — a sentinel row whose conversation is missing is genuinely unreachable
+and lands in ``orphan_conv`` like any other row.
+
 This module computes the resolution; routes consume the resulting
 :class:`TagState` rather than the raw ``all_tags()`` dict so templates only
 ever render resolved data.
@@ -23,7 +30,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from viewer.tagging import all_tags
+from viewer.tagging import NO_PROJECT_SENTINEL, all_tags
 
 if TYPE_CHECKING:
     from viewer.parser import Export
@@ -70,7 +77,7 @@ def compute_tag_state(conn: sqlite3.Connection, export: Export) -> TagState:
     for cuid, puid in raw.items():
         if cuid not in conv_uuids:
             orphan_conv[cuid] = puid
-        elif puid not in project_uuids:
+        elif puid != NO_PROJECT_SENTINEL and puid not in project_uuids:
             orphan_project[cuid] = puid
         else:
             live[cuid] = puid
