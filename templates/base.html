@@ -4,8 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Claude Export Viewer{% endblock %}</title>
+  {# Vendored highlight.js theme loads BEFORE style.css so app styles win
+     equal-specificity ties (pre/code padding and background). #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='memory.js') }}" defer></script>
+  {# Deferred scripts execute in document order — the highlight.js bundle
+     must precede the powershell language module (registers into the hljs
+     global; the export's dominant language, absent from the common build),
+     and both must precede highlight-init.js, which calls into them. #}
+  <script src="{{ url_for('static', filename='vendor/highlightjs/highlight.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='vendor/highlightjs/powershell.min.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='highlight-init.js') }}" defer></script>
   {% block extra_head %}{% endblock %}
 </head>
 <body>

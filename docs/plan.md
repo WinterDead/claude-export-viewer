@@ -110,7 +110,30 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
   - `.gitattributes` pins `run.sh` to LF (and the Windows scripts to CRLF) against
     `core.autocrlf`; `tests/test_launchers.py` guards file presence, the shim wiring, and the
     public-trajectory verify-negatives.
-- **Session F** — client-side syntax highlighting via vendored highlight.js.
+- **Session F** *(shipped)* — client-side syntax highlighting via vendored highlight.js
+  (brief: `docs/briefs/v1.1-session-f-brief.md`; verification matrix:
+  `docs/briefs/v1.1-session-f-verification.md`). Locked decisions:
+  - The one allowlist rule: `class` survives bleach **only on `<code>`**, and only when the
+    entire value matches `^language-[A-Za-z0-9_+#.-]+$` (attribute callable in
+    `viewer/render.py`). This *replaced* an unrestricted `class` allowance on `code` and `pre`
+    that predated the session — the brief's premise ("class is stripped everywhere") was wrong
+    about the starting state, so the change is a pure narrowing, verified by the F2 matrix.
+    Do not widen (tags, attributes, pattern, `style`) without a written brief.
+  - Vendored under `static/vendor/highlightjs/`: highlight.js **11.11.1** common-languages
+    build **plus the upstream `powershell` language module** (soft-gate addition — ~90% of the
+    reference export's hinted fences are powershell, which the common build lacks), the
+    **GitHub light** theme, and the upstream BSD-3-Clause LICENSE. No CDN, ever.
+  - Load order is load-bearing and test-pinned (`tests/test_highlighting.py`): theme CSS
+    before `style.css` so app styles win equal-specificity ties; core bundle before the
+    powershell module before `highlight-init.js` (deferred scripts run in document order).
+  - Init scope is `.markdown-body pre code` only — conversation messages, knowledge docs,
+    memory blocks, and the help page; search snippets (`.search-snippet`) are excluded by
+    construction and inline code by the `pre` in the selector. The skip-`<mark>` guard is
+    load-bearing: highlight.js rebuilds elements from text content, destroying search-hit
+    marks, so mark-bearing blocks render unhighlighted by design. One-shot DOMContentLoaded
+    init; no observers, no idle-deferral (151 ms on the largest real conversation — no jank).
+  - Unregistered hints (toml, batch) fall back to plain text with a console log note —
+    expected highlight.js behaviour, left as-is.
 - **Session G** — README rewrite, LICENSE, synthetic-fixture screenshots, tag v1.1.0.
   Screenshot rule: screenshots must come from the synthetic fixture and must avoid or crop the
   footer — it echoes the local source path verbatim.

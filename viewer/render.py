@@ -8,6 +8,7 @@ Flask imports, so the helpers can be unit-tested without booting an app.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -75,11 +76,28 @@ _ALLOWED_TAGS = frozenset(
 )
 _SUMMARY_PREVIEW_MAX_CHARS = 200
 
-_ALLOWED_ATTRS: dict[str, list[str]] = {
+# The one place ``class`` survives sanitisation (v1.1 Session F): on ``<code>``,
+# and only when the ENTIRE attribute value matches this pattern — the language
+# hint python-markdown's ``fenced_code`` emits (``<code class="language-x">``),
+# which the client-side highlighter reads. ``+#.-`` exist for real language
+# names (c++, c#, objective-c). Whole-value matching means a multi-class value
+# like ``"evil language-python"`` is stripped outright. This rule REPLACED an
+# earlier unrestricted ``class`` allowance on ``code`` and ``pre`` — it is a
+# deliberate narrowing. Do not widen it (more tags, more attributes, a looser
+# pattern, ``style``) without a written brief: this allowlist is the app's
+# sanitisation security boundary.
+_CODE_CLASS_RE = re.compile(r"^language-[A-Za-z0-9_+#.-]+$")
+
+
+def _code_attribute_filter(tag: str, name: str, value: str) -> bool:
+    """Bleach attribute callable for ``<code>`` — see ``_CODE_CLASS_RE`` above."""
+    return name == "class" and bool(_CODE_CLASS_RE.fullmatch(value))
+
+
+_ALLOWED_ATTRS: dict[str, list[str] | Callable[[str, str, str], bool]] = {
     "a": ["href", "title"],
     "img": ["src", "alt", "title"],
-    "code": ["class"],  # language-* for fenced code blocks
-    "pre": ["class"],
+    "code": _code_attribute_filter,
     "th": ["align"],
     "td": ["align"],
 }

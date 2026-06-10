@@ -143,6 +143,89 @@ def test_sanitiser_preserves_fenced_code_language_class() -> None:
     assert 'class="language-python"' in out
 
 
+# ---------------------------------------------------------------------------
+# The ``class`` boundary (v1.1 Session F). ``class`` survives only on <code>
+# and only when the ENTIRE value matches ^language-[A-Za-z0-9_+#.-]+$ — the
+# fenced-code language hint the client-side highlighter reads. Everything
+# below is a verify-negative pinning that boundary; the verification matrix
+# lives in docs/briefs/v1.1-session-f-verification.md. Do not loosen these
+# assertions without a written brief.
+# ---------------------------------------------------------------------------
+
+
+def test_code_class_language_python_survives() -> None:
+    out = str(markdown_to_html('<code class="language-python">x</code>'))
+    assert 'class="language-python"' in out
+
+
+def test_code_class_special_character_languages_survive() -> None:
+    """The pattern's ``+#.-`` exists for real language names."""
+    for lang in ("c++", "c#", "objective-c"):
+        out = str(markdown_to_html(f'<code class="language-{lang}">x</code>'))
+        assert f'class="language-{lang}"' in out, lang
+
+
+def test_code_class_fenced_path_special_characters_survive() -> None:
+    """Same languages via the real-world path — a fenced block with a hint."""
+    out = str(markdown_to_html("```c++\nint x;\n```"))
+    assert 'class="language-c++"' in out
+
+
+def test_code_class_multi_class_value_stripped() -> None:
+    """The ENTIRE value must match — a multi-class value is stripped outright,
+    even though one of its classes would match alone."""
+    out = str(markdown_to_html('<code class="evil language-python">x</code>'))
+    assert "class=" not in out
+    assert "<code>" in out  # the tag itself survives, bare
+
+
+def test_code_class_non_language_value_stripped() -> None:
+    out = str(markdown_to_html('<code class="anything-else">x</code>'))
+    assert "class=" not in out
+
+
+def test_class_on_pre_stripped() -> None:
+    out = str(markdown_to_html('<pre class="fancy"><code class="language-python">x</code></pre>'))
+    assert "<pre>" in out  # tag survives...
+    assert 'class="fancy"' not in out  # ...its class does not
+    assert 'class="language-python"' in out  # the <code> hint inside still does
+
+
+def test_class_on_span_and_div_stripped() -> None:
+    """span/div aren't on the tag allowlist at all — the whole tag goes
+    (inner text kept), so no class can survive on them by construction."""
+    out = str(markdown_to_html('<span class="x">keep me</span>'))
+    assert "<span" not in out
+    assert "keep me" in out
+
+    out = str(markdown_to_html('<div class="x">keep me too</div>'))
+    assert "<div" not in out
+    assert "keep me too" in out
+
+
+def test_class_on_anchor_stripped() -> None:
+    out = str(markdown_to_html('<a class="x" href="https://example.invalid/">link</a>'))
+    assert "<a" in out
+    assert 'href="https://example.invalid/"' in out
+    assert "class=" not in out
+
+
+def test_style_attribute_stripped_everywhere() -> None:
+    """``style`` is never allowed — not even on a <code> with a valid hint."""
+    out = str(markdown_to_html('<code class="language-python" style="color:red">x</code>'))
+    assert "style=" not in out
+    assert 'class="language-python"' in out
+
+    out = str(markdown_to_html('<p style="position:fixed">x</p>'))
+    assert "style=" not in out
+
+
+def test_event_handler_on_code_stripped_class_kept() -> None:
+    out = str(markdown_to_html('<code class="language-python" onclick="alert(1)">x</code>'))
+    assert "onclick" not in out
+    assert 'class="language-python"' in out
+
+
 def test_sanitiser_keeps_mark_tag() -> None:
     """<mark> is on the allowlist for search highlighting (plan §12 step 6).
 

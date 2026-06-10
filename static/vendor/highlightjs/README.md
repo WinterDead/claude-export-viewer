@@ -1,0 +1,1 @@
+highlight.js 11.11.1 (common-languages build, plus the `powershell` language module — the dominant hinted language in the reference export and absent from the common build) with the GitHub light theme, vendored from https://github.com/highlightjs/cdn-release — see LICENSE (BSD-3-Clause) alongside.

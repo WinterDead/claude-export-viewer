@@ -3,3 +3,7 @@
 run.sh text eol=lf
 run.bat text eol=crlf
 run.ps1 text eol=crlf
+
+# Vendored third-party assets: no EOL conversion ever — keep them
+# byte-identical to what upstream shipped.
+static/vendor/** -text
