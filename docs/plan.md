@@ -24,7 +24,9 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
 - Search-snippet highlighting rides the substitute-then-markdown path; `<mark>` stays on the
   bleach allowlist (load-bearing).
 
-## v1.1 — roadmap
+## v1.1 — shipped (closed)
+
+Tagged `v1.1.0`. All seven sessions (A–G) shipped; per-session locked decisions below.
 
 - **Session A** *(shipped)* — sender label change ("human" → "User"), search syntax guide,
   upload history log. Locked decisions:
@@ -134,9 +136,18 @@ Decisions locked in v1.0 (do not relitigate without a written brief):
     init; no observers, no idle-deferral (151 ms on the largest real conversation — no jank).
   - Unregistered hints (toml, batch) fall back to plain text with a console log note —
     expected highlight.js behaviour, left as-is.
-- **Session G** — README rewrite, LICENSE, synthetic-fixture screenshots, tag v1.1.0.
-  Screenshot rule: screenshots must come from the synthetic fixture and must avoid or crop the
-  footer — it echoes the local source path verbatim.
+- **Session G** *(shipped)* — README rewrite, LICENSE, synthetic-fixture screenshots, version
+  bump, tag `v1.1.0` (brief: `docs/briefs/v1.1-session-g-brief.md`). Locked decisions:
+  - The README has verified-documentation status (same as the help page and search guide):
+    every behavioural claim was checked against the code before commit. Edit it like
+    documentation — claims change only when the behaviour does.
+  - Screenshots live in `docs/images/` (four PNGs: conversations list, branch switcher,
+    search hits, help page), taken from the synthetic fixture via an isolated instance
+    (temp `db_path`, fixture `export_source`), footer cropped from every shot and
+    `source_paths` pinned to the bare filename. The soft gate on fixture presentability was
+    resolved in review: shipped as-is; no purpose-built demo fixture.
+  - LICENSE is MIT, copyright "2026 WinterDead". The README's licence section is one line
+    pointing at the file.
 
 Small backlog (unscheduled, not part of any session above):
 
