@@ -1,11 +1,13 @@
 # Claude Export Viewer
 
-Local Python web app for reading Claude.ai data exports (the zipped JSON archive Anthropic emails when you request your data). Inspired by `osteele/claude-chat-viewer`, but adds support for project-grouped conversations and the memory file — both of which the upstream tool currently ignores.
+Local Python web app for reading Claude.ai data exports (the zipped JSON archive Anthropic emails when you request your data). Inspired by `osteele/claude-chat-viewer`, but adds support for project-grouped conversations
+and the memory file — gaps in the upstream tool at the time this project started.
 
 ## Status
 
-v1.0.0 shipped (feature-complete viewer). v1.1 in progress — see `docs/plan.md` for the roadmap
-and per-session briefs under `docs/briefs/`.
+Feature-complete and versioned. `docs/plan.md` is the canonical record of the current
+version, roadmap, and locked decisions; per-session briefs live under `docs/briefs/`. This
+file deliberately carries no version status, so it never drifts.
 
 ## Constraints
 
@@ -14,7 +16,9 @@ and per-session briefs under `docs/briefs/`.
 - SQLite with FTS5 for full-text search (stdlib `sqlite3`)
 - Personal use, localhost only — no auth, no deployment, no telemetry
 - All data stays on the machine; no external network calls at runtime
-- Windows host, so paths use `.venv\Scripts\python.exe` not `.venv/bin/python`
+- Primary development host is Windows, so development commands use
+  `.venv\Scripts\python.exe`; the launchers (`run.sh`, `run.ps1`, `run.bat`) cover end users
+  on all three platforms
 
 ## Coding conventions
 
@@ -51,21 +55,27 @@ At the end of every session:
 7. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
    obsolete detail.
 
-## Proposed structure (finalize after inspecting the export)
+## Repository structure
 
 ```
 claude-export-viewer/
-├── app.py                 # Flask entry point
-├── viewer/
-│   ├── parser.py          # Read ZIP, normalize JSON, build typed records
-│   ├── search.py          # SQLite FTS5 index + queries
-│   ├── routes.py          # HTTP routes
-│   └── render.py          # Markdown, code highlighting, artifact extraction
-├── templates/             # Jinja2
-├── static/                # CSS, minimal JS
-├── tests/
-├── data/                  # user's export ZIP (gitignored)
-└── docs/                  # design notes, schema reference
+├── app.py                 # Flask app factory; startup load order: uploaded export → dev copy → fixture
+├── viewer/                # Application package: parser, parse cache, tagging, upload history, FTS5 search, routes, rendering, help content
+├── templates/             # Jinja2 templates (server-side rendering)
+├── static/                # CSS, page JS, vendored highlight.js
+├── tests/                 # pytest suite + synthetic fixtures
+├── tools/                 # scan_artifacts.py — stdlib scanner for artifact calls in an export
+├── docs/                  # plan, export-schema reference, artifact-encoding study, briefs, screenshots
+├── run.ps1, run.bat, run.sh  # double-clickable launchers (Windows / macOS / Linux)
+├── pyproject.toml         # packaging, dependencies, black/ruff/pytest config
+├── README.md              # user-facing documentation
+├── CLAUDE.md              # this file: development instructions and conventions
+├── LICENSE                # MIT
+├── .claude/               # dev-server launch config for tooling
+├── .gitattributes         # line-ending pins for the launchers; vendored assets exempt from EOL conversion
+├── .gitignore             # excludes data/, cache/, .venv/, and derived state
+├── data/                  # gitignored — optional dev-convenience export copy (data.zip)
+└── cache/                 # gitignored — uploaded export, parse cache, tag/history database
 ```
 
 ## Feature scope
@@ -82,23 +92,9 @@ Net-new (the gaps that motivate this project):
 - **Project grouping.** Conversations that lived inside a Claude Project should be browsable by project, not just listed flat.
 - **Memory file view.** The export contains a memory file (the dump of what Claude has stored across conversations); render it readably.
 
-## First-session protocol (read before writing any application code)
-
-The export ZIP format has evolved and isn't reliably documented. Web sources contradict each other. Before designing data models, schemas, or routes:
-
-1. Locate the export ZIP at `data/export.zip`.
-2. Inventory it: list every file in the archive, identify each top-level JSON file, and sample 1–3 records from each. Note field names, value shapes, and any version markers.
-3. For each conversation, identify how messages are structured — text, code, artifacts (`tool_use` / `tool_result` content blocks), thinking blocks, attachments.
-4. Identify how project membership is represented for conversations: a `project_uuid` field on each conversation? A separate `projects.json`? Directory grouping inside the ZIP?
-5. Identify the memory file's filename and structure (Markdown? JSON? plain text?).
-6. Write findings to `docs/export-schema.md`, including a small synthetic fixture the parser tests can use.
-
-Only after the inventory exists should we design schemas, write the parser, or scaffold routes.
-
 ## Out of scope
 
 - Multi-user support
 - Authentication of any kind
 - Cloud deployment
 - Modifying the export ZIP
-- Markdown / PDF export of conversations (defer; possible follow-up)

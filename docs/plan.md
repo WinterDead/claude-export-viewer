@@ -149,30 +149,65 @@ Tagged `v1.1.0`. All seven sessions (A–G) shipped; per-session locked decision
   - LICENSE is MIT, copyright "2026 WinterDead". The README's licence section is one line
     pointing at the file.
 
-Small backlog (unscheduled, not part of any session above):
+## Roadmap (post-v1.1)
 
-- **Polish** — harmonise sort-toggle vocabulary across the conversations, projects, and memory
-  pages to the "Recently updated / Recently created / Title (A–Z)" pattern where semantics
-  match. Same pass: reconcile the "Prompt template" label (project-detail UI) with "custom
-  instructions" (help copy, matching Claude.ai's product term) — surfaced in the Session C
-  verification matrix.
-- **Behaviour** — graceful startup on an unparseable stored export: instead of raising, fall
-  through the existing load order, surface a persistent banner, and keep the bad file in place
-  so the Upload flow (parse-before-replace) becomes the recovery path. Update the two
-  help-page troubleshooting entries ("I see sample data…" and "The app fails to start…") when
-  it ships.
+Sequenced 2026-07; supersedes the earlier "v1.2 — gate items" list. Definition of done for
+the core product is v1.2.5 — versions after it are enhancements, not completion.
 
-## v1.2 — gate items (out of scope for v1.1)
+### v1.1.5 — housekeeping (no new features)
 
-- **Public-readiness audit** before the repo goes public: secret-key handling, host-binding
-  confirmation, dependency pins.
-- **Artifact extraction** (Session D recommendation: feasible). Minimal scope proposed in
-  `docs/artifact-encoding.md`: reconstruct final state along the rendered path, render real
-  content in the placeholder cards, per-artifact download named from `title`/`type`,
-  preserve-and-flag for unobserved commands. Requires a decision on branch semantics (three
-  candidate rules in the doc) before implementation.
-- **File-tools discovery pass** (planning input for archive recovery). Mirror Session D's
-  method against `create_file` / `str_replace` (and related file-tool) calls in the export:
-  their inputs carry full file bodies and now outnumber artifact calls several-fold, so they
-  may matter more than artifacts for recovering work from the archive. `tools/scan_artifacts.py`
-  is the starting point to generalise into a scanner for these tool names.
+Theme: a clean, public-safe base. Closes exactly as scoped.
+
+- Documentation drift: CLAUDE.md revision (status handling, out-of-scope list, retirement of
+  genesis-era sections, personal-references pass) and this roadmap section replacing the old
+  gate-items list.
+- Vocabulary harmonisation: sort-toggle labels unified to "Recently updated / Recently
+  created / Title (A–Z)" where semantics match; "Prompt template" (project-detail UI)
+  reconciled with "custom instructions" (help copy, matching the Claude product term).
+- Graceful startup on an unparseable stored export: fall through the existing load order
+  with a persistent banner instead of raising, keeping the bad file in place so the upload
+  flow is the recovery path; ships with the two dependent help-copy edits.
+- Launcher hardening, from the 2026-07 POSIX verification: friendly handling of a missing
+  venv module (Debian-family `python3-venv`), and venv validation so a half-created,
+  pip-less `.venv` is recreated instead of crashing the rerun. Windows launchers checked for
+  the same pattern.
+- Code-level audit items: secret-key handling, host-binding confirmation (127.0.0.1 only),
+  dependency pins.
+
+### v1.2 — simple inspector + conversation export
+
+- Simple inspector: open, inspect, and close an export that isn't the main one, without
+  touching the real tagging database — swappable export and database paths plus a picker.
+  Ships first within the version; it is the test harness for export.
+- Conversation export to file: Markdown as the primary format. For PDF, the working lean is
+  the browser's print-to-PDF over a polished print stylesheet rather than a PDF-generation
+  dependency — confirm in the design pass, which starts by verifying the current state of
+  print styling (its existence is a genesis-era claim, never verified as shipped). The design
+  pass also covers format details, single vs bulk, branch handling, thinking blocks, tool
+  cards, and a privacy review, all before any implementation brief.
+
+### v1.2.5 — public release
+
+- Delta audit of what v1.2 introduced: inspector path handling; export writing conversation
+  content to disk.
+- run.sh re-verification on a live USB session (the launcher-hardening changes return it to
+  unverified-on-POSIX; the operator procedure exists).
+- Demo-fixture decision: optional purpose-built fixture if the synthetic screenshots read
+  too plainly.
+- GitHub Releases created from the version tags with short changelogs; the repo flips
+  public.
+
+### Later (unscheduled, non-blocking)
+
+Order between the two is undecided until development resumes; the current lean is portable
+tag state first.
+
+- Artifact + file-tools extraction. Blocked behind a manufactured test corpus: deliberately
+  create artifacts of every type — edit histories, rewrites, branch divergence — export, and
+  inspect the designed corpus before designing the feature; combine with the file-tools scan
+  (`create_file`/`str_replace` bodies) since the two may be one "recover authored content"
+  feature. Do not build against the current export's biased sample.
+- Portable, mergeable tag state (full profile system). The tag database is the app's only
+  irreplaceable state; the export is re-downloadable, the triage work is not. The hard part
+  is reconciliation semantics for one user across multiple machines (last-write-wins,
+  surfaced conflicts, rollback); needs its own discovery/design pass before any code.
