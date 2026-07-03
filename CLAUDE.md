@@ -78,19 +78,12 @@ claude-export-viewer/
 └── cache/                 # gitignored — uploaded export, parse cache, tag/history database
 ```
 
-## Feature scope
+## What the app is
 
-Parity with `osteele/claude-chat-viewer`:
-- ZIP upload (no extraction needed)
-- Conversation list with summaries
-- Single conversation view with code blocks, artifacts, thinking blocks
-- Title/summary search, full-text search, regex, case-sensitive toggle, live result counter
-- Copy whole conversation, download artifacts as ZIP
-- Print-friendly layout
-
-Net-new (the gaps that motivate this project):
-- **Project grouping.** Conversations that lived inside a Claude Project should be browsable by project, not just listed flat.
-- **Memory file view.** The export contains a memory file (the dump of what Claude has stored across conversations); render it readably.
+A local viewer for Claude.ai data exports: browse conversations (including branched ones),
+projects with their knowledge docs and prompt template, and the memory file; tag
+conversations by project; full-text search across everything. The README is the canonical
+user-facing feature description; this file carries only what development sessions need.
 
 ## Out of scope
 

@@ -149,6 +149,49 @@ Tagged `v1.1.0`. All seven sessions (A–G) shipped; per-session locked decision
   - LICENSE is MIT, copyright "2026 WinterDead". The README's licence section is one line
     pointing at the file.
 
+## v1.1.5 — in progress
+
+Housekeeping version; the scope is the roadmap's v1.1.5 block below. Sessions H and I are
+shipped; Session J (launcher hardening, code-level audit items) remains and tags the version.
+
+- **Session H** *(shipped)* — documentation drift (brief:
+  `docs/briefs/v1.1.5-session-h-brief.md`). Locked decisions:
+  - This document's Roadmap section replaced the v1.0-era gate-items list and small backlog.
+  - CLAUDE.md carries no version status (plan.md is canonical); the upstream-tool claim is
+    past-tense; the repository tree was regenerated with verified annotations;
+    "First-session protocol" was deleted.
+  - Task 2.4 ("Feature scope" → "What the app is") hard-stopped in-session per the brief:
+    thinking blocks were shipped but not described in the README. Closure was deferred to
+    Session I with operator dispositions (below). The Session H report itself was not
+    committed; its hard-stop substance is recorded in the H commit message and closed here.
+- **Session I** *(shipped)* — H residue, vocabulary, graceful startup, help copy (brief:
+  `docs/briefs/v1.1.5-session-i-brief.md`). Locked decisions:
+  - The README Features list now includes the thinking-blocks bullet; CLAUDE.md's "Feature
+    scope" was replaced by "What the app is" — the README is the canonical user-facing
+    feature description.
+  - Operator dispositions for the old genesis wishlist (2026-07, recorded so they aren't
+    relitigated): print-friendly layout is classified "skeleton, unverified — covered by
+    roadmap" (the v1.2 design pass verifies it); regex search, case-sensitive toggle, and
+    live result counter are **dropped**; copy-whole-conversation is folded into the v1.2
+    export design pass as a candidate (see the roadmap bullet).
+  - Sort-toggle labels: the canonical set is "Recently updated / Recently created /
+    Title (A–Z)". The memory page was harmonised (including toggle order). The alphabetical
+    sort on the projects and memory pages stays "Name (A–Z)" — both sort by the project's
+    *name*, so forcing "Title" would mislabel the field.
+  - The project-detail UI label is "Custom instructions" (Claude product term, matching the
+    help copy); code identifiers keep `prompt_template`.
+  - Graceful startup: the stored upload and the dev copy fall through the load order on
+    `ExportFormatError` with a `WARNING` naming the skipped source, file left in place. A
+    skipped stored upload raises a persistent non-dismissible banner (distinct from the
+    orphan banner) cleared by a successful upload; the dev copy falls through silently; a
+    broken fixture still raises (structural invariant). Tests in `tests/test_startup.py`;
+    corrupt fixture `tests/fixtures/corrupt_export.zip` (synthetic bytes).
+  - Help troubleshooting rewritten to match: the sample-data entry names both causes, the
+    banner entry replaces the startup-crash entry (whose premise no longer exists), and a
+    new entry explains Flask's development-server warning. The host binding behind that
+    entry's 127.0.0.1 claim was verified at code level (Flask CLI default host, no
+    overrides in any start path); Session J pins it with a test.
+
 ## Roadmap (post-v1.1)
 
 Sequenced 2026-07; supersedes the earlier "v1.2 — gate items" list. Definition of done for
@@ -184,7 +227,9 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   dependency — confirm in the design pass, which starts by verifying the current state of
   print styling (its existence is a genesis-era claim, never verified as shipped). The design
   pass also covers format details, single vs bulk, branch handling, thinking blocks, tool
-  cards, and a privacy review, all before any implementation brief.
+  cards, and a privacy review, all before any implementation brief. A copy-whole-conversation
+  control (clipboard rather than file) is a design-pass candidate riding the same
+  serialisation.
 
 ### v1.2.5 — public release
 

@@ -48,6 +48,8 @@ The in-app help page, with one section expanded:
 - **Upload history.** Every export load is recorded — when, the filename, a content
   fingerprint, and the headline counts — so over time it doubles as a record of how your
   archive has grown.
+- **Thinking blocks** — Claude's reasoning is preserved and rendered as collapsible sections
+  within each conversation, flagged where the export marks a block truncated or cut off.
 - **Syntax-highlighted code blocks**, via a vendored copy of highlight.js (no CDN).
 - **In-app help** covering everything from requesting an export to the tagging workflow.
 

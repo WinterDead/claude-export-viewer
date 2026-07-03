@@ -35,6 +35,16 @@
     </nav>
   </header>
 
+  {% if g_stored_export_failed %}
+    {# Persistent, non-dismissible: rendered on every page while the flag is
+       set; a successful upload clears it. Copy is chat-authored, byte-exact
+       (v1.1.5 Session I brief, Task C). #}
+    <aside class="load-error-banner" role="alert">
+      Your stored export couldn't be parsed and wasn't loaded. The file was left in place —
+      upload a replacement from the Upload page to get back to your data.
+    </aside>
+  {% endif %}
+
   {% if g_orphan_count and g_orphan_count > 0 %}
     <aside class="orphan-banner" role="status">
       <strong>{{ g_orphan_count }}</strong> orphan tag

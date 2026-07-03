@@ -137,20 +137,20 @@ def test_section_anchor_ids_use_slug_format(synthetic_client) -> None:
 
 def test_memory_sort_toggle_renders_three_options(synthetic_client) -> None:
     body = synthetic_client.get("/memory").get_data(as_text=True)
-    assert "Most recent" in body
-    assert "Alphabetical" in body
-    assert "Newest" in body
+    assert "Recently updated" in body
+    assert "Recently created" in body
+    assert "Name (A–Z)" in body
 
 
 def test_memory_default_sort_is_updated_desc(synthetic_client) -> None:
     body = synthetic_client.get("/memory").get_data(as_text=True)
-    m = re.search(r"sort-option active[^>]*>\s*Most recent", body)
+    m = re.search(r"sort-option active[^>]*>\s*Recently updated", body)
     assert m
 
 
 def test_memory_invalid_sort_falls_back_to_default(synthetic_client) -> None:
     body = synthetic_client.get("/memory?sort=bogus").get_data(as_text=True)
-    m = re.search(r"sort-option active[^>]*>\s*Most recent", body)
+    m = re.search(r"sort-option active[^>]*>\s*Recently updated", body)
     assert m
 
 
@@ -168,13 +168,13 @@ def test_memory_global_first_regardless_of_sort(synthetic_client) -> None:
 
 def test_memory_name_asc_sort_param_active(synthetic_client) -> None:
     body = synthetic_client.get("/memory?sort=name_asc").get_data(as_text=True)
-    m = re.search(r"sort-option active[^>]*>\s*Alphabetical", body)
+    m = re.search(r"sort-option active[^>]*>\s*Name \(A–Z\)", body)
     assert m
 
 
 def test_memory_created_desc_sort_param_active(synthetic_client) -> None:
     body = synthetic_client.get("/memory?sort=created_desc").get_data(as_text=True)
-    m = re.search(r"sort-option active[^>]*>\s*Newest", body)
+    m = re.search(r"sort-option active[^>]*>\s*Recently created", body)
     assert m
 
 

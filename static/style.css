@@ -1277,6 +1277,19 @@ section h2 {
   font-size: 0.92rem;
 }
 
+/* Graceful-startup banner (v1.1.5 Session I): the stored export failed to
+   parse and was skipped. Deliberately distinct from the amber orphan
+   banner — this one reads as an error, not an advisory. */
+.load-error-banner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+  background: #fdecea;
+  border-bottom: 1px solid #b3261e;
+  color: #5f1a14;
+  font-size: 0.92rem;
+}
+
 .orphan-banner a {
   color: var(--accent);
   font-weight: 600;
@@ -1468,6 +1481,7 @@ section h2 {
   .branch-switcher,
   .search-form,
   .orphan-banner,
+  .load-error-banner,
   .orphan-purge,
   .upload-form,
   .help-controls {

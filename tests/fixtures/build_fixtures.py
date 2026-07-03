@@ -707,6 +707,14 @@ _BATCH_NONZERO_FILENAME = (
 )
 
 
+# Raw-bytes fixtures — files that are not zip archives at all, for the
+# graceful-startup fallthrough (v1.1.5 Session I). Deterministic synthetic
+# bytes, deliberately without the "PK" zip magic so zipfile rejects them.
+RAW_FIXTURES: dict[str, bytes] = {
+    "corrupt_export.zip": b"This file is deliberately not a zip archive.\n" * 8,
+}
+
+
 FIXTURES: dict[str, callable[[], dict[str, bytes]]] = {
     "synthetic_export.zip": _happy_path_files,
     "bad_missing_users.zip": _bad_missing_users,
@@ -750,6 +758,10 @@ def build_all() -> list[Path]:
     for filename, builder in FIXTURES.items():
         out = FIXTURES_DIR / filename
         _write_zip(out, builder())
+        written.append(out)
+    for filename, raw in RAW_FIXTURES.items():
+        out = FIXTURES_DIR / filename
+        out.write_bytes(raw)
         written.append(out)
     return written
 

@@ -585,6 +585,9 @@ def upload_post():
     db = get_db()
     index_export(db, new_export)
     current_app.config["EXPORT"] = new_export
+    # A successful upload replaced the stored file, so the graceful-startup
+    # banner condition clears with it (v1.1.5 Session I).
+    current_app.config["STORED_EXPORT_FAILED"] = False
 
     # Record after the swap succeeded. Uploads always record, even when the
     # sha matches an earlier row — an explicit user action is worth logging.

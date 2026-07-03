@@ -131,11 +131,11 @@ A privacy note on destinations: the export ZIP contains your complete conversati
 
 ### I see sample data instead of my export
 
-No export has been uploaded yet. Upload your ZIP via the Upload page. The footer always shows what's currently loaded.
+Two possible causes. If you've never uploaded an export, the app shows its built-in sample so the interface is explorable — upload your ZIP via the Upload page. If you have uploaded one, the stored export may have failed to load; a banner will say so (see the next entry). Either way, the footer always shows what's currently loaded.
 
-### The app fails to start with a parse error
+### A banner says the stored export couldn't be loaded
 
-The stored export is malformed. Check the startup log in the terminal for specifics. Because the app can't start, the Upload page isn't reachable — delete (or move) cache/active_export.zip, start the app, and upload a good export through the Upload page.
+The stored export is malformed. The app leaves the bad file in place and falls back to the next available source (usually the sample data), so nothing is lost — but your data isn't shown until the file is replaced. Upload a good export via the Upload page; a successful upload replaces the stored file and clears the banner. The terminal log has the parse details if you want them.
 
 ### Search finds nothing for something I know exists
 
@@ -152,6 +152,10 @@ They almost certainly didn't — they've gone orphaned because the new export is
 ### Port 5000 is already in use
 
 Something else on your machine is using the default port. The launcher script handles this automatically — it picks the next free port and prints the address. If you start the app manually instead, choose another port: `flask --app app run --port 5050`.
+
+### The terminal warns "This is a development server"
+
+That message comes from Flask, the web framework the viewer is built on, and it's expected. The warning matters for public websites; this app only listens on your own machine (127.0.0.1) and is never exposed to the network. Nothing needs fixing.
 
 ### A page shows stale content
 

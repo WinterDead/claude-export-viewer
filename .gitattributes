@@ -7,3 +7,8 @@ run.ps1 text eol=crlf
 # Vendored third-party assets: no EOL conversion ever — keep them
 # byte-identical to what upstream shipped.
 static/vendor/** -text
+
+# Test fixtures are byte-exact artefacts of build_fixtures.py. The real
+# archives are detected as binary anyway; corrupt_export.zip is deliberately
+# text-like bytes, so pin the whole set against EOL conversion.
+tests/fixtures/*.zip -text

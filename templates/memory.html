@@ -15,19 +15,20 @@
 
   {# Sort toggle: same pattern as the conversation list. Global memory is
      always rendered first regardless of sort; the toggle only affects the
-     project-memories ordering. #}
+     project-memories ordering. Labels say "Name", not "Title" — the sort
+     key is the owning project's name. #}
   <nav class="sort-toggle" aria-label="Sort project memories">
     <a href="{{ url_for('viewer.memory_view', sort='updated_desc') }}"
        class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
-      Most recent
-    </a>
-    <a href="{{ url_for('viewer.memory_view', sort='name_asc') }}"
-       class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
-      Alphabetical
+      Recently updated
     </a>
     <a href="{{ url_for('viewer.memory_view', sort='created_desc') }}"
        class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
-      Newest
+      Recently created
+    </a>
+    <a href="{{ url_for('viewer.memory_view', sort='name_asc') }}"
+       class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
+      Name (A–Z)
     </a>
   </nav>
 

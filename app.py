@@ -11,6 +11,12 @@ Startup load order (plan §12 step 7):
 3. ``tests/fixtures/synthetic_export.zip`` — last-ditch fallback so the
    templates always have *something* to render.
 
+An unparseable stored upload or dev copy falls through to the next source
+with a ``WARNING`` (v1.1.5 Session I) — the file is left in place and, for
+the stored upload, every page shows a banner until a successful upload
+replaces it. A broken fixture still raises: it is committed code, so a
+failure there is a broken build, not a user condition.
+
 When the active zip is present and its hash matches the pickle cache key,
 ``viewer.cache.load_or_build`` short-circuits the parse step. ``create_app``
 accepts an explicit path or ``Export`` for tests.
@@ -18,6 +24,7 @@ accepts an explicit path or ``Export`` for tests.
 
 from __future__ import annotations
 
+import logging
 import secrets
 from pathlib import Path
 
@@ -28,7 +35,7 @@ from viewer.cache import load_or_build, zip_hash
 from viewer.db import close_db, get_db
 from viewer.history import init_db as init_history_db
 from viewer.history import record_startup_load
-from viewer.parser import Export, load_export
+from viewer.parser import Export, ExportFormatError, load_export
 from viewer.render import (
     block_type,
     conversation_display_title,
@@ -53,14 +60,43 @@ REAL_EXPORT = PROJECT_ROOT / "data" / "data.zip"
 SYNTHETIC_FIXTURE = PROJECT_ROOT / "tests" / "fixtures" / "synthetic_export.zip"
 DB_PATH = CACHE_DIR / "viewer.sqlite"
 
+logger = logging.getLogger(__name__)
 
-def _resolve_default_source() -> Path:
-    """Apply the documented startup-load order."""
+
+def _load_default_source() -> tuple[Export, tuple[str, str] | None, bool]:
+    """Apply the documented startup-load order, falling through gracefully.
+
+    Returns ``(export, startup_record, stored_export_failed)``. The stored
+    upload and the dev copy are files a user (or developer) put there, so a
+    parse failure logs a ``WARNING`` naming the skipped source and falls
+    through to the next source, leaving the file exactly where it is — the
+    parse-before-replace upload flow is the recovery path. The fixture is
+    committed code: a broken fixture is a broken build, not a user
+    condition, so its failure still raises (structural invariant per the
+    preserve-and-flag rule).
+    """
+    stored_export_failed = False
     if ACTIVE_ZIP.is_file():
-        return ACTIVE_ZIP
+        # Hash once: the digest keys the pickle cache AND identifies the
+        # archive in the upload-history log (A3 — no second hashing).
+        sha = zip_hash(ACTIVE_ZIP)
+        try:
+            export = load_or_build(ACTIVE_ZIP, PARSE_CACHE, zip_sha256=sha)
+            return export, (ACTIVE_ZIP.name, sha), False
+        except ExportFormatError as e:
+            logger.warning(
+                "stored export %s could not be parsed and was skipped " "(file left in place): %s",
+                ACTIVE_ZIP,
+                e,
+            )
+            stored_export_failed = True
     if REAL_EXPORT.is_file():
-        return REAL_EXPORT
-    return SYNTHETIC_FIXTURE
+        try:
+            export = load_export(REAL_EXPORT)
+            return export, (REAL_EXPORT.name, zip_hash(REAL_EXPORT)), stored_export_failed
+        except ExportFormatError as e:
+            logger.warning("dev copy %s could not be parsed and was skipped: %s", REAL_EXPORT, e)
+    return load_export(SYNTHETIC_FIXTURE), None, stored_export_failed
 
 
 def create_app(
@@ -90,12 +126,18 @@ def create_app(
     # for an upload-history row — real exports only (the active zip or the
     # dev ``data/data.zip``). Fixture and test loads record nothing.
     startup_record: tuple[str, str] | None = None
+    # True when the stored upload was skipped for a parse failure — drives
+    # the persistent banner until a successful upload replaces the file.
+    stored_export_failed = False
 
     if isinstance(export_source, Export):
         export = export_source
+    elif export_source is None:
+        # Default startup: apply the load order with graceful fallthrough.
+        export, startup_record, stored_export_failed = _load_default_source()
     else:
-        if export_source is None:
-            export_source = _resolve_default_source()
+        # Explicit source (tests, dev calls): parse failures raise — the
+        # caller named the file, so degrading silently would mask the error.
         src = Path(export_source)
         # Use the parse cache only for the active export — fixtures and
         # the dev ``data/data.zip`` get parsed fresh every time, so test
@@ -113,6 +155,7 @@ def create_app(
             export = load_export(src)
 
     app.config["EXPORT"] = export
+    app.config["STORED_EXPORT_FAILED"] = stored_export_failed
     app.config["DB_PATH"] = db_path if db_path is not None else DB_PATH
     app.config["ACTIVE_ZIP_PATH"] = ACTIVE_ZIP
     app.config["PARSE_CACHE_PATH"] = PARSE_CACHE
@@ -176,6 +219,9 @@ def create_app(
             "g_user_name": live_export.user.full_name,
             "g_source_paths": list(live_export.source_paths),
             "g_orphan_count": orphan_count,
+            # Re-read per request: a successful upload clears the flag
+            # without a restart (viewer.routes.upload_post).
+            "g_stored_export_failed": app.config.get("STORED_EXPORT_FAILED", False),
         }
 
     app.register_blueprint(bp)
