@@ -12,14 +12,32 @@ Step 4 ergonomic shape (confirmed in §12 step 4):
 
 from __future__ import annotations
 
+import io
 import shutil
+import zipfile
+from datetime import date
 from pathlib import Path
 
-from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    current_app,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 
 from viewer.cache import invalidate as invalidate_cache
 from viewer.cache import zip_hash
 from viewer.db import get_db
+from viewer.export import (
+    ExportOptions,
+    bulk_zip_filename,
+    export_filename,
+    serialise_conversation,
+)
 from viewer.history import all_history, record_load
 from viewer.inspect import begin_inspection, end_inspection, get_inspection
 from viewer.parser import (
@@ -296,6 +314,129 @@ def _build_switchers(
             )
         switchers[bp_uuid] = rows
     return switchers
+
+
+# ---------------------------------------------------------------------------
+# Conversation export (v1.2 Session M)
+# ---------------------------------------------------------------------------
+
+
+# Query/form values accepted as "on" for the two export toggles. Anything
+# else — including an explicit 0/false — is off; an absent or empty value
+# takes the option's design-locked default.
+_EXPORT_FLAG_TRUE = frozenset({"1", "true", "yes", "on"})
+
+
+def _export_flag(raw: str | None, default: bool) -> bool:
+    if raw is None or not raw.strip():
+        return default
+    return raw.strip().lower() in _EXPORT_FLAG_TRUE
+
+
+def _export_options(values) -> ExportOptions:
+    """Read the two toggles from query args or form data. Defaults are
+    design-locked: thinking off, attachment text on."""
+    return ExportOptions(
+        include_thinking=_export_flag(values.get("thinking"), False),
+        include_attachment_text=_export_flag(values.get("attachments"), True),
+    )
+
+
+def _export_project_label(conv_uuid: str) -> str | None:
+    """Resolve the viewer-tag label for the ``project`` frontmatter field.
+
+    ``None`` means the field is absent. Tags are primary-export state
+    (v1.2 Session K), so while inspecting no tag is consulted at all —
+    pairing YOUR tag rows with an inspected export's conversations is never
+    meaningful. The No-Project sentinel is not a project, so it carries no
+    label; an orphan tag (project no longer in the archive) has no label to
+    resolve.
+    """
+    if get_inspection(current_app) is not None:
+        return None
+    tag = get_tag(get_db(), conv_uuid)
+    if not tag or tag == NO_PROJECT_SENTINEL:
+        return None
+    primary: Export = current_app.config["EXPORT"]
+    project = next((p for p in primary.projects if p.uuid == tag), None)
+    return project.name if project is not None else None
+
+
+@bp.route("/conversations/<uuid>/export")
+def conversation_export(uuid: str):
+    """Download one conversation as a Markdown file.
+
+    WYSIWYG per the design record: accepts the same ``branch`` parameters
+    as the detail page and exports that displayed combination. Read-only by
+    construction — the document is assembled in memory and returned as a
+    browser download, so the route works while inspecting (a primary use
+    case) and never writes server-side.
+    """
+    export = _current_export()
+    conv = next((c for c in export.conversations if c.uuid == uuid), None)
+    if conv is None:
+        abort(404)
+
+    path_uuids, _ignored = compute_render_path(conv, request.args.getlist("branch"))
+    document = serialise_conversation(
+        conv,
+        path_uuids,
+        _export_options(request.args),
+        project_label=_export_project_label(uuid),
+        exported_on=date.today(),
+    )
+    response = Response(document, mimetype="text/markdown")
+    response.headers["Content-Disposition"] = f'attachment; filename="{export_filename(conv)}"'
+    return response
+
+
+@bp.route("/conversations/export", methods=["POST"])
+def conversation_export_bulk():
+    """Download a selection of conversations as a zip of Markdown files.
+
+    CSRF-protected like every other POST. Each conversation exports its
+    default branch path; filename collisions inside the archive get a short
+    uuid fragment (the *last* eight characters — the synthetic fixtures
+    share their leading digits). The zip is assembled entirely in memory
+    for the response, never written server-side, so this route too works
+    while inspecting.
+    """
+    export = _current_export()
+    conv_uuids = list(dict.fromkeys(u for u in request.form.getlist("conversation_uuid") if u))
+    if not conv_uuids:
+        abort(400, "no conversations selected")
+    conv_by_uuid = {c.uuid: c for c in export.conversations}
+    bad = next((u for u in conv_uuids if u not in conv_by_uuid), None)
+    if bad is not None:
+        abort(400, f"unknown conversation {bad}")
+
+    options = _export_options(request.form)
+    today = date.today()
+
+    buffer = io.BytesIO()
+    used_names: set[str] = set()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for conv_uuid in conv_uuids:
+            conv = conv_by_uuid[conv_uuid]
+            name = export_filename(conv)
+            if name in used_names:
+                name = export_filename(conv, fragment=conv.uuid[-8:])
+            if name in used_names:
+                # Same slug, date, and fragment — the full uuid is unique.
+                name = export_filename(conv, fragment=conv.uuid)
+            used_names.add(name)
+            document = serialise_conversation(
+                conv,
+                conv.canonical_path,
+                options,
+                project_label=_export_project_label(conv_uuid),
+                exported_on=today,
+            )
+            zf.writestr(name, document)
+
+    response = Response(buffer.getvalue(), mimetype="application/zip")
+    response.headers["Content-Disposition"] = f'attachment; filename="{bulk_zip_filename(today)}"'
+    return response
 
 
 # ---------------------------------------------------------------------------

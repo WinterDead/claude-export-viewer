@@ -284,6 +284,39 @@ three sessions (H, I, J) shipped; per-session locked decisions below.
     scoped as a recommendation list; its core is deliberate WYSIWYG printing with visible
     summaries (the design record's thinking-alignment requirement) and an explicit
     do-not-resurrect note for blanket force-open via the modern pseudo-element.
+- **Session M** *(shipped)* — conversation-export serializer + download endpoints (brief:
+  `docs/briefs/v1.2-session-m-brief.md`; report: `docs/briefs/v1.2-session-m-report.md`).
+  Backend only — no UI, no template edits; Session N owns the UI entry points, print polish,
+  and the README/help updates. Locked decisions:
+  - `viewer/export.py` serialises the *stored* Markdown directly (Flask-free, same rule as
+    `viewer/render.py`); the markdown → bleach pipeline is never involved, so the feature
+    adds no sanitiser surface. `ExportOptions` defaults are design-locked and test-pinned:
+    `include_thinking=False`, `include_attachment_text=True`.
+  - Endpoints: `GET /conversations/<uuid>/export` (WYSIWYG — accepts the same `branch`
+    parameters as the detail page) and `POST /conversations/export` (CSRF-protected; zip
+    assembled entirely in memory, one `.md` per conversation on its default branch path).
+    Both work while inspecting — they read via `_current_export()` and write nothing; the
+    Session K no-trace snapshot holds with exports in the cycle (test-pinned).
+  - Error-result parity (the brief's Task 1.2 verification target): the reading view marks
+    error results (` · error` in the card meta plus an `is-error` class), so the export card
+    carries the same ` · error` marker. Tool pairing is positional (the Session D finding),
+    tolerates an absent result (`— no result recorded.`, byte-exact per the brief), and
+    renders an orphan `tool_result` as its own card (dormant; none exist in real data).
+  - Frontmatter conditional scoping: `thinking`/`attachments`/`branch_points` trigger on what
+    the *conversation* has (all branches — the design record's literal wording); `messages`
+    counts the exported path, as the spec states. The `project` field carries a live tag's
+    project name only — absent for untagged conversations, the No-Project sentinel (not a
+    project), orphan tags (no label to resolve), and always while inspecting (tags never
+    pair with an inspected export, per Session K).
+  - Naming: file dates are the conversation's created date as stored (UTC — the same instant
+    the `created` field carries); `exported` and the zip name use the export-day local date.
+    The bulk collision fragment is the *last* eight uuid characters (the synthetic fixtures
+    share their leading digits). The `generator` version reads `pyproject.toml` via
+    `tomllib`; installed-package metadata goes stale under editable installs and is only the
+    fallback.
+  - The branch annotation's `response(s)` is exported as literal spec text for any N;
+    flagged for Session N as candidate copy polish. The copy-whole-conversation control
+    remains undecided and falls to Session N with the rest of the UI.
 
 ## Roadmap (post-v1.1)
 
@@ -316,13 +349,13 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   close an export that isn't the main one, without touching the real tagging database.
   Shipped first within the version; it is the test harness for export.
 - Conversation export to file: Markdown as the primary format. The design pass is complete —
-  `docs/export-design.md` is the design record (Session L, locked decisions above), and its
-  two discovery prerequisites (content-block census, print-CSS assessment) are met with no
-  open rendering decisions. Remaining v1.2 work: the serializer implementation
-  (Session M, per the design record) and the print-polish pass scoped by
+  `docs/export-design.md` is the design record (Session L, locked decisions above) — and the
+  serializer plus both download endpoints shipped in Session M (locked decisions above).
+  Remaining v1.2 work (Session N): the UI entry points (detail-page Export control and the
+  list's "Export selected" action), the print-polish pass scoped by
   `docs/print-css-assessment.md` (which also confirms print-to-PDF over a PDF-generation
-  dependency remains the right lean). A copy-whole-conversation control (clipboard rather
-  than file) rides the serializer; its inclusion is decided in the implementation brief.
+  dependency remains the right lean), the README/help updates, and the
+  copy-whole-conversation decision (clipboard rather than file — inclusion still undecided).
 
 ### v1.2.5 — public release
 
