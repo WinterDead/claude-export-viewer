@@ -1,4 +1,4 @@
-# Claude Export Viewer launcher (Windows).
+﻿# Claude Export Viewer launcher (Windows).
 #
 # Double-click run.bat to use this; the shim invokes this file with a
 # per-invocation execution-policy bypass. This script never changes anything
@@ -78,9 +78,21 @@ if ($null -eq $python) {
 
 Write-Host "Found Python $pythonVersion ($($python.Label))."
 
-# --- 2. Create the virtual environment if absent --------------------------
+# --- 2. Create the virtual environment if absent or incomplete ------------
 
 $venvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
+
+# Trust an existing .venv only if it actually has pip: a venv with a python
+# but no pip is a half-created leftover, and the install step below would
+# die with "No module named pip".
+if (Test-Path $venvPython) {
+    & $venvPython -m pip --version *> $null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "The app's virtual environment is incomplete — rebuilding it..."
+        Remove-Item -Recurse -Force ".venv"
+    }
+}
+
 if (-not (Test-Path $venvPython)) {
     Write-Host "Creating the project's virtual environment (.venv)..."
     $venvArgs = @($python.Args) + @("-m", "venv", ".venv")
@@ -130,7 +142,7 @@ foreach ($candidate in $Ports) {
 if ($null -eq $port) {
     Write-Host "All of the usual ports ($($Ports -join ', ')) are busy."
     Write-Host "Next step: close whatever is using them, or start the app yourself on a port of your choice:"
-    Write-Host "  .venv\Scripts\python.exe -m flask --app app run --port 8080"
+    Write-Host "  .venv\Scripts\python.exe -m flask --app app run --host 127.0.0.1 --port 8080"
     exit 1
 }
 
@@ -170,7 +182,7 @@ Write-Host "Starting Claude Export Viewer at $url"
 Write-Host "Your browser should open by itself. Press Ctrl+C in this window to stop the app."
 Write-Host ""
 
-& $venvPython -m flask --app app run --port $port
+& $venvPython -m flask --app app run --host 127.0.0.1 --port $port
 
 $flaskExit = $LASTEXITCODE
 Stop-Job $browserJob -ErrorAction SilentlyContinue

@@ -54,6 +54,10 @@ At the end of every session:
 6. Commit with a descriptive message. Do not leave sessions uncommitted.
 7. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
    obsolete detail.
+8. Write the session report, including its verification matrix, to `docs/briefs/`
+   alongside the session's brief (same naming pattern) and commit it with the session's
+   work. If the final commit hash isn't known at writing time, cite the commit message or
+   tag instead.
 
 ## Repository structure
 
@@ -81,7 +85,7 @@ claude-export-viewer/
 ## What the app is
 
 A local viewer for Claude.ai data exports: browse conversations (including branched ones),
-projects with their knowledge docs and prompt template, and the memory file; tag
+projects with their knowledge docs and custom instructions, and the memory file; tag
 conversations by project; full-text search across everything. The README is the canonical
 user-facing feature description; this file carries only what development sessions need.
 

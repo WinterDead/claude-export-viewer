@@ -149,10 +149,10 @@ Tagged `v1.1.0`. All seven sessions (A–G) shipped; per-session locked decision
   - LICENSE is MIT, copyright "2026 WinterDead". The README's licence section is one line
     pointing at the file.
 
-## v1.1.5 — in progress
+## v1.1.5 — shipped (closed)
 
-Housekeeping version; the scope is the roadmap's v1.1.5 block below. Sessions H and I are
-shipped; Session J (launcher hardening, code-level audit items) remains and tags the version.
+Tagged `v1.1.5`. Housekeeping version; the scope was the roadmap's v1.1.5 block below. All
+three sessions (H, I, J) shipped; per-session locked decisions below.
 
 - **Session H** *(shipped)* — documentation drift (brief:
   `docs/briefs/v1.1.5-session-h-brief.md`). Locked decisions:
@@ -191,6 +191,35 @@ shipped; Session J (launcher hardening, code-level audit items) remains and tags
     new entry explains Flask's development-server warning. The host binding behind that
     entry's 127.0.0.1 claim was verified at code level (Flask CLI default host, no
     overrides in any start path); Session J pins it with a test.
+- **Session J** *(shipped)* — launcher hardening, audit items, close-out (brief:
+  `docs/briefs/v1.1.5-session-j-brief.md`; report:
+  `docs/briefs/v1.1.5-session-j-report.md`). Locked decisions:
+  - `run.sh` venv handling: a failed venv creation removes the partial `.venv` and prints
+    Debian-family guidance (`python3-venv`) instead of surfacing a raw ensurepip error; an
+    existing `.venv` is trusted only after a `pip --version` probe, and a pip-less venv is
+    removed and recreated. `run.ps1` gains the same pip probe; its venv-creation failure
+    branch is unchanged — the missing-venv-module condition is Debian-specific (Windows
+    Pythons bundle venv), so the Debian message does not apply there. Content guards in
+    `tests/test_launchers.py`. These changes return `run.sh` to unverified-on-POSIX; the
+    v1.2.5 live-session re-verification covers it.
+  - `run.ps1` is UTF-8 with BOM from this session on: the rebuild notice's em-dash must
+    survive Windows PowerShell 5.1, which reads BOM-less `.ps1` files as ANSI.
+  - Explicit host binding: every start path in the repo (`run.sh`, `run.ps1`,
+    `.claude/launch.json`, and both all-busy manual command lines) states
+    `--host 127.0.0.1` rather than inheriting the Flask CLI default. The manual commands
+    in README.md and help.md stay implicit deliberately (public-voice text, out of this
+    session's scope); a canary test fails if the installed Flask CLI's `run` default host
+    ever stops being 127.0.0.1.
+  - Secret key: verified as bucket "already random per-process" — `secrets.token_hex(32)`
+    per `create_app` call, no committed literal, no environment fallback. Pinned by
+    `tests/test_secret_key.py` (fresh per start, 256-bit hex). CSRF tokens not surviving a
+    restart stays accepted for a localhost single-user tool.
+  - Dependency caps: next-major upper bounds in `pyproject.toml` (`Flask>=3.0,<4`,
+    `Flask-WTF>=1.2,<2`, `markdown>=3.5,<4`, `bleach>=6.1,<7`); clean-install proof into a
+    fresh venv with the import probe passing.
+  - Session reports are now part of the session-end checklist (step 8): written to
+    `docs/briefs/` alongside the brief and committed with the session's work. The Session
+    H and I reports were filed retroactively, verbatim.
 
 ## Roadmap (post-v1.1)
 

@@ -60,16 +60,35 @@ fi
 
 echo "Found Python $(version_of "$PYTHON") (${PYTHON})."
 
-# --- 2. Create the virtual environment if absent --------------------------
+# --- 2. Create the virtual environment if absent or incomplete ------------
 
 VENV_PY=".venv/bin/python"
-if [ ! -x "$VENV_PY" ]; then
+
+create_venv() {
     echo "Creating the project's virtual environment (.venv)..."
     if ! "$PYTHON" -m venv .venv || [ ! -x "$VENV_PY" ]; then
-        echo "Creating .venv did not work."
-        echo "Next step: delete the .venv folder if one was half-created, then run this script again."
+        # Debian-family systems ship Python without the venv module; the
+        # failed attempt leaves a partial .venv a rerun must not trust.
+        rm -rf .venv
+        echo "This system's Python can't create virtual environments yet — the add-on that provides"
+        echo "them is missing. On Ubuntu, Mint, or Debian, run:"
+        echo ""
+        echo "    sudo apt update && sudo apt install python3-venv"
+        echo ""
+        echo "then run this script again. On other systems, install the venv module for your"
+        echo "Python 3.11+ and rerun."
         exit 1
     fi
+}
+
+if [ ! -x "$VENV_PY" ]; then
+    create_venv
+elif ! "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+    # A venv with a python but no pip is a half-created leftover; rebuild it
+    # rather than let the install step die with "No module named pip".
+    echo "The app's virtual environment is incomplete — rebuilding it..."
+    rm -rf .venv
+    create_venv
 fi
 
 # Install the app into the venv only when its dependencies are not importable
@@ -112,7 +131,7 @@ done
 if [ -z "$PORT" ]; then
     echo "All of the usual ports ($PORTS) are busy."
     echo "Next step: close whatever is using them, or start the app yourself on a port of your choice:"
-    echo "  .venv/bin/python -m flask --app app run --port 8080"
+    echo "  .venv/bin/python -m flask --app app run --host 127.0.0.1 --port 8080"
     exit 1
 fi
 
@@ -159,4 +178,4 @@ echo "Starting Claude Export Viewer at $URL"
 echo "Your browser should open by itself. Press Ctrl+C in this window to stop the app."
 echo ""
 
-exec "$VENV_PY" -m flask --app app run --port "$PORT"
+exec "$VENV_PY" -m flask --app app run --host 127.0.0.1 --port "$PORT"
