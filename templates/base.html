@@ -29,11 +29,27 @@
         <li><a href="{{ url_for('viewer.memory_view') }}">Memory</a></li>
         <li><a href="{{ url_for('viewer.search_view') }}">Search</a></li>
         <li><a href="{{ url_for('viewer.upload_form') }}">Upload</a></li>
+        <li><a href="{{ url_for('viewer.inspect_form') }}">Inspect</a></li>
         <li><a href="{{ url_for('viewer.history_view') }}">History</a></li>
         <li><a href="{{ url_for('viewer.help_view') }}">Help</a></li>
       </ul>
     </nav>
   </header>
+
+  {% if g_inspecting %}
+    {# Inspect-mode signal (v1.2 Session K): persistent on every page while
+       inspecting, in a third banner colour distinct from the amber orphan
+       advisory and the red load-error banner. Copy is chat-authored,
+       byte-exact; the text span stays on one line so the rendered bytes
+       match the authored sentence. #}
+    <aside class="inspect-banner" role="status">
+      <span class="inspect-banner-text">Inspecting {{ g_inspect_filename }} — read-only. Your own export and tags are untouched.</span>
+      <form method="post" action="{{ url_for('viewer.inspect_exit') }}" class="inspect-exit-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="inspect-exit-btn">Return to my export</button>
+      </form>
+    </aside>
+  {% endif %}
 
   {% if g_stored_export_failed %}
     {# Persistent, non-dismissible: rendered on every page while the flag is

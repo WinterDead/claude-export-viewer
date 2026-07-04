@@ -20,6 +20,10 @@ On startup, the app loads the most recently uploaded export automatically. If yo
 
 Each successful load is recorded on the [History](/history) page.
 
+## Inspecting another export
+
+Sometimes you want to look inside an export without making it yours — a second account's archive, a colleague's export, or a test file. The [Inspect page](/inspect) opens an export temporarily and read-only: no tagging, nothing saved to disk, nothing recorded in upload history, and your own export and tags stay exactly as they were. A banner reminds you which file you're inspecting; the **Return to my export** button in the banner (or simply restarting the app) puts everything back. To replace your stored export instead, use Upload.
+
 ## The home page
 
 A dashboard with two parts:

@@ -44,11 +44,15 @@
               {{ p.docs | length }}
               doc{% if p.docs | length != 1 %}s{% endif %}
             </span>
+            {# Tag counts pair primary tags with primary projects — hidden in
+               inspect mode, where they'd be meaningless. #}
+            {% if not g_inspecting %}
             <span aria-hidden="true"> · </span>
             <span>
               {{ tag_counts.get(p.uuid, 0) }}
               tagged conversation{% if tag_counts.get(p.uuid, 0) != 1 %}s{% endif %}
             </span>
+            {% endif %}
             {% if p.memory %}
               <span aria-hidden="true"> · </span>
               <span>memory present</span>

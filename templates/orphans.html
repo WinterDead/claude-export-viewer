@@ -100,6 +100,7 @@
       {% endif %}
     </section>
 
+    {% if not g_inspecting %}
     <section class="orphan-section orphan-purge">
       <h2>Purge</h2>
       <form method="post" action="{{ url_for('viewer.orphans_purge') }}" class="orphan-purge-form">
@@ -116,6 +117,9 @@
         contacted. Purging is undoable only by re-tagging from scratch.
       </p>
     </section>
+    {% else %}
+      <p class="empty">Purging is disabled while you're inspecting an export.</p>
+    {% endif %}
   {% endif %}
 </section>
 {% endblock %}

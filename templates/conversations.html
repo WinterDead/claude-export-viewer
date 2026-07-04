@@ -4,7 +4,9 @@
 {% block title %}Conversations — Claude Export Viewer{% endblock %}
 
 {% block extra_head %}
-  <script src="{{ url_for('static', filename='bulk_tag.js') }}" defer></script>
+  {% if not g_inspecting %}
+    <script src="{{ url_for('static', filename='bulk_tag.js') }}" defer></script>
+  {% endif %}
 {% endblock %}
 
 {% block content %}
@@ -18,7 +20,11 @@
 
   {# Bulk action bar — managed by static/bulk_tag.js. The form attribute on
      each per-row checkbox associates it with this form despite not being
-     nested under it, so checked uuids are submitted automatically. #}
+     nested under it, so checked uuids are submitted automatically.
+     Absent in inspect mode (v1.2 Session K): every action it offers is
+     mutating. Sessions M/N's non-mutating export actions will re-introduce
+     a bar for inspect-mode pages. #}
+  {% if not g_inspecting %}
   <form id="bulk-form"
         method="post"
         action="{{ url_for('viewer.tag_bulk') }}"
@@ -50,6 +56,7 @@
       Untag selected
     </button>
   </form>
+  {% endif %}
 
   <div class="list-controls">
     <nav class="sort-toggle" aria-label="Sort order">
@@ -67,6 +74,7 @@
       </a>
     </nav>
 
+    {% if not g_inspecting %}
     <form method="get" action="{{ url_for('viewer.conversation_list') }}" class="tag-filter">
       <label class="tag-filter-label">
         <span class="tag-filter-text">Filter:</span>
@@ -86,6 +94,7 @@
       <input type="hidden" name="sort" value="{{ sort }}">
       <noscript><button type="submit">Filter</button></noscript>
     </form>
+    {% endif %}
   </div>
 
   {% if not conversations %}
@@ -102,12 +111,14 @@
     <ul class="conv-list">
       {% for c in conversations %}
         <li class="conv-row" data-tagged="{{ tags.get(c.uuid, '') }}">
+          {% if not g_inspecting %}
           <input type="checkbox"
                  form="bulk-form"
                  name="conversation_uuid"
                  value="{{ c.uuid }}"
                  class="conv-checkbox"
                  aria-label="Select for bulk tagging">
+          {% endif %}
           <div class="conv-row-main">
             <a class="conv-title-link"
                href="{{ url_for('viewer.conversation_detail', uuid=c.uuid) }}">
@@ -134,11 +145,13 @@
               {% endif %}
             </p>
           </div>
+          {% if not g_inspecting %}
           <div class="conv-row-tag">
             {{ tag_form(c.uuid, tags.get(c.uuid), projects, request.full_path,
                         label='Tag',
                         current_tag_orphan=(c.uuid in orphan_project_tags)) }}
           </div>
+          {% endif %}
         </li>
       {% endfor %}
     </ul>

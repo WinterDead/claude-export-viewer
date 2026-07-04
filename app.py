@@ -35,6 +35,7 @@ from viewer.cache import load_or_build, zip_hash
 from viewer.db import close_db, get_db
 from viewer.history import init_db as init_history_db
 from viewer.history import record_startup_load
+from viewer.inspect import get_inspection
 from viewer.parser import Export, ExportFormatError, load_export
 from viewer.render import (
     block_type,
@@ -207,9 +208,15 @@ def create_app(
         # Re-read EXPORT each request so the orphan banner reflects the
         # post-upload state without a server restart. Cheap (object refs,
         # no parsing).
-        live_export: Export = app.config["EXPORT"]
+        primary_export: Export = app.config["EXPORT"]
+        # Inspect mode (v1.2 Session K): the footer chrome follows the view
+        # (the inspected export's user and filename), but orphan state stays
+        # pinned to the primary export — tags always resolve against YOUR
+        # archive, so the banner count must not shift while inspecting.
+        inspect_state = get_inspection(app)
+        live_export = inspect_state.export if inspect_state is not None else primary_export
         try:
-            state = compute_tag_state(get_db(), live_export)
+            state = compute_tag_state(get_db(), primary_export)
             orphan_count = state.orphan_count
         except Exception:  # noqa: BLE001
             # Banner is informational; never block a page render on its
@@ -222,6 +229,8 @@ def create_app(
             # Re-read per request: a successful upload clears the flag
             # without a restart (viewer.routes.upload_post).
             "g_stored_export_failed": app.config.get("STORED_EXPORT_FAILED", False),
+            "g_inspecting": inspect_state is not None,
+            "g_inspect_filename": inspect_state.filename if inspect_state is not None else "",
         }
 
     app.register_blueprint(bp)

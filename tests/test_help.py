@@ -43,6 +43,7 @@ ALL_PAGES = (
     "/memory",
     "/search",
     "/upload",
+    "/inspect",
     "/history",
     "/orphans",
     "/help",

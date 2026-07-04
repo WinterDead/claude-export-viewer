@@ -29,6 +29,10 @@
     </p>
   </header>
 
+  {# Tagged conversations are primary-export state — the whole section is
+     absent in inspect mode rather than showing an empty list that links
+     into the tagging workflow. #}
+  {% if not g_inspecting %}
   <section class="project-section">
     <h2>Tagged conversations</h2>
     {% if tagged_conversations %}
@@ -58,6 +62,7 @@
       </p>
     {% endif %}
   </section>
+  {% endif %}
 
   {% if project.prompt_template %}
     <section class="project-section">

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Inspect an export — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="inspect-page">
+  <header class="page-header">
+    <h1>Inspect an export</h1>
+    {# Intro copy is chat-authored, byte-exact (v1.2 Session K brief). #}
+    <p class="lede">
+      Open a Claude data export temporarily, without touching your own data. The inspected
+      export is read-only: no tagging, nothing saved, and nothing added to your upload history.
+      When you're done — or when the app restarts — you're back to your own export. To replace
+      your stored export instead, use Upload.
+    </p>
+  </header>
+
+  {% if error %}
+    <p class="warn">{{ error }}</p>
+  {% endif %}
+
+  <form method="post"
+        action="{{ url_for('viewer.inspect_post') }}"
+        enctype="multipart/form-data"
+        class="upload-form inspect-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="upload-form-label" for="inspect-zip">
+      <span class="upload-form-text">Export ZIP:</span>
+      <input id="inspect-zip"
+             type="file"
+             name="export_zip"
+             accept=".zip,application/zip"
+             required>
+    </label>
+    <button type="submit" class="upload-submit">Inspect</button>
+  </form>
+
+  <p class="upload-hint">
+    File must be a <code>.zip</code>. Max size 200&nbsp;MB. The file is
+    parsed in memory and never written to disk.
+  </p>
+</section>
+{% endblock %}

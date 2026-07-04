@@ -21,7 +21,15 @@ from viewer.cache import invalidate as invalidate_cache
 from viewer.cache import zip_hash
 from viewer.db import get_db
 from viewer.history import all_history, record_load
-from viewer.parser import Conversation, Export, ExportFormatError, Project, load_export
+from viewer.inspect import begin_inspection, end_inspection, get_inspection
+from viewer.parser import (
+    Conversation,
+    Export,
+    ExportFormatError,
+    Project,
+    load_export,
+    load_export_from_bytes,
+)
 from viewer.render import (
     compute_render_path,
     conversation_display_title,
@@ -105,6 +113,23 @@ def _safe_redirect(next_url: str, fallback: str) -> str:
     return fallback
 
 
+def _current_export() -> Export:
+    """The export the read-only views render: the inspected one while
+    inspect mode is active (v1.2 Session K), otherwise the primary."""
+    state = get_inspection(current_app)
+    if state is not None:
+        return state.export
+    return current_app.config["EXPORT"]
+
+
+def _refuse_while_inspecting() -> None:
+    """Structural isolation for inspect mode: every mutating route calls
+    this first and refuses outright, rather than trusting the templates to
+    have hidden the controls."""
+    if get_inspection(current_app) is not None:
+        abort(403, "Read-only while inspecting an export. Return to your own export first.")
+
+
 # ---------------------------------------------------------------------------
 # Home
 # ---------------------------------------------------------------------------
@@ -112,7 +137,7 @@ def _safe_redirect(next_url: str, fallback: str) -> str:
 
 @bp.route("/")
 def index() -> str:
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     total_messages = sum(len(c.messages) for c in export.conversations)
     branched = sum(1 for c in export.conversations if c.branch_points)
     project_memories = sum(1 for p in export.projects if p.memory is not None)
@@ -145,25 +170,36 @@ def index() -> str:
 
 @bp.route("/conversations")
 def conversation_list() -> str:
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     sort = request.args.get("sort", DEFAULT_CONV_SORT)
     if sort not in CONV_SORT_OPTIONS:
         sort = DEFAULT_CONV_SORT
 
-    tag_filter = request.args.get("tag") or None
-    state = compute_tag_state(get_db(), export)
-    # ``tags`` for the per-row dropdown: live tags + orphan-project tags so
-    # the dropdown can render the orphan affordance. Orphan-conv tags don't
-    # apply here — those convs aren't in the list at all.
-    tags = {**state.live, **state.orphan_project}
-    valid_filter = (
-        tag_filter is None
-        or tag_filter == "untagged"
-        or tag_filter == NO_PROJECT_SLUG
-        or any(p.uuid == tag_filter for p in export.projects)
-    )
-    if not valid_filter:
+    if get_inspection(current_app) is not None:
+        # Tags are primary-export state. In inspect mode the tagging UI and
+        # the tag filter are structurally absent (v1.2 Session K), so no tag
+        # state is computed or applied at all.
         tag_filter = None
+        tags: dict[str, str] = {}
+        orphan_project_tags: dict[str, str] = {}
+        live_tags: dict[str, str] = {}
+    else:
+        tag_filter = request.args.get("tag") or None
+        state = compute_tag_state(get_db(), export)
+        # ``tags`` for the per-row dropdown: live tags + orphan-project tags so
+        # the dropdown can render the orphan affordance. Orphan-conv tags don't
+        # apply here — those convs aren't in the list at all.
+        tags = {**state.live, **state.orphan_project}
+        orphan_project_tags = state.orphan_project
+        live_tags = state.live
+        valid_filter = (
+            tag_filter is None
+            or tag_filter == "untagged"
+            or tag_filter == NO_PROJECT_SLUG
+            or any(p.uuid == tag_filter for p in export.projects)
+        )
+        if not valid_filter:
+            tag_filter = None
 
     # The slug is the URL spelling; the sentinel is what's stored. Templates
     # keep seeing the slug (links round-trip), the filter sees the sentinel.
@@ -171,7 +207,7 @@ def conversation_list() -> str:
 
     # Filtering uses live tags only — orphan-project tags don't match a real
     # project so they shouldn't satisfy a "Tagged: <Project>" filter anyway.
-    filtered = _filter_conversations_by_tag(export.conversations, internal_filter, state.live)
+    filtered = _filter_conversations_by_tag(export.conversations, internal_filter, live_tags)
     conversations = _sort_conversations(filtered, sort)
 
     projects_sorted = sorted(export.projects, key=lambda p: p.name.lower())
@@ -182,7 +218,7 @@ def conversation_list() -> str:
         sort=sort,
         tag_filter=tag_filter,
         tags=tags,
-        orphan_project_tags=state.orphan_project,
+        orphan_project_tags=orphan_project_tags,
         projects=projects_sorted,
         total_conversations=len(export.conversations),
     )
@@ -190,7 +226,7 @@ def conversation_list() -> str:
 
 @bp.route("/conversations/<uuid>")
 def conversation_detail(uuid: str) -> str:
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     conv = next((c for c in export.conversations if c.uuid == uuid), None)
     if conv is None:
         abort(404)
@@ -202,15 +238,21 @@ def conversation_detail(uuid: str) -> str:
     rendered_set = set(rendered_path)
     switchers = _build_switchers(conv, rendered_set, branch_overrides, msg_by_uuid)
 
-    db = get_db()
-    current_tag = get_tag(db, uuid)
-    project_uuids = {p.uuid for p in export.projects}
-    # The No-Project sentinel always "exists" — never orphan-flag it.
-    current_tag_orphan = (
-        bool(current_tag)
-        and current_tag != NO_PROJECT_SENTINEL
-        and current_tag not in project_uuids
-    )
+    if get_inspection(current_app) is not None:
+        # Tagging is primary-export state; the dropdown is absent in inspect
+        # mode, so nothing is read from the tag table.
+        current_tag = None
+        current_tag_orphan = False
+    else:
+        db = get_db()
+        current_tag = get_tag(db, uuid)
+        project_uuids = {p.uuid for p in export.projects}
+        # The No-Project sentinel always "exists" — never orphan-flag it.
+        current_tag_orphan = (
+            bool(current_tag)
+            and current_tag != NO_PROJECT_SENTINEL
+            and current_tag not in project_uuids
+        )
     projects_sorted = sorted(export.projects, key=lambda p: p.name.lower())
 
     return render_template(
@@ -263,14 +305,20 @@ def _build_switchers(
 
 @bp.route("/projects")
 def project_list() -> str:
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     sort = request.args.get("sort", DEFAULT_PROJECT_SORT)
     if sort not in PROJECT_SORT_OPTIONS:
         sort = DEFAULT_PROJECT_SORT
     projects = _sort_projects(export.projects, sort)
 
-    db = get_db()
-    tag_counts = {p.uuid: len(tags_for_project(db, p.uuid)) for p in projects}
+    if get_inspection(current_app) is not None:
+        # Tag counts pair YOUR tags with YOUR projects — meaningless against
+        # an inspected export's project list, so the template hides the stat
+        # and no counts are computed.
+        tag_counts: dict[str, int] = {}
+    else:
+        db = get_db()
+        tag_counts = {p.uuid: len(tags_for_project(db, p.uuid)) for p in projects}
 
     return render_template(
         "projects.html",
@@ -282,7 +330,7 @@ def project_list() -> str:
 
 @bp.route("/projects/<uuid>")
 def project_detail(uuid: str):
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     # The No-Project sentinel has no detail page — its "contents" are the
     # filtered conversations list, so send the request there instead of 404ing.
     if uuid == NO_PROJECT_SENTINEL:
@@ -291,10 +339,16 @@ def project_detail(uuid: str):
     if project is None:
         abort(404)
 
-    db = get_db()
-    tagged_uuids = set(tags_for_project(db, uuid))
-    tagged = [c for c in export.conversations if c.uuid in tagged_uuids]
-    tagged_sorted = _sort_conversations(tagged, DEFAULT_CONV_SORT)
+    if get_inspection(current_app) is not None:
+        # Tagged-conversation lists mix YOUR tag rows with the inspected
+        # export's conversations — never meaningful, so the section is
+        # hidden by the template and nothing is read from the tag table.
+        tagged_sorted: list[Conversation] = []
+    else:
+        db = get_db()
+        tagged_uuids = set(tags_for_project(db, uuid))
+        tagged = [c for c in export.conversations if c.uuid in tagged_uuids]
+        tagged_sorted = _sort_conversations(tagged, DEFAULT_CONV_SORT)
 
     return render_template(
         "project_detail.html",
@@ -321,7 +375,7 @@ def memory_view() -> str:
     default in the template); per-section ``<details>`` (expanded by
     default) split the body when section headings are detectable.
     """
-    export: Export = current_app.config["EXPORT"]
+    export = _current_export()
     sort = request.args.get("sort", DEFAULT_MEMORY_SORT)
     if sort not in MEMORY_SORT_OPTIONS:
         sort = DEFAULT_MEMORY_SORT
@@ -423,10 +477,16 @@ SEARCH_RESULT_LIMIT = 200
 def search_view() -> str:
     """Single-field FTS5 search across conversations, messages, projects,
     docs, and memory. Hits are grouped by their owning entity so a
-    conversation with multiple matching messages renders as one card."""
-    export: Export = current_app.config["EXPORT"]
+    conversation with multiple matching messages renders as one card.
+
+    In inspect mode the query runs against the inspected export's in-memory
+    index — the primary FTS index in ``cache/viewer.sqlite`` is never read
+    or written while inspecting."""
+    export = _current_export()
+    inspect_state = get_inspection(current_app)
+    conn = inspect_state.search_conn if inspect_state is not None else get_db()
     query = (request.args.get("q") or "").strip()
-    results = search(get_db(), query, limit=SEARCH_RESULT_LIMIT)
+    results = search(conn, query, limit=SEARCH_RESULT_LIMIT)
 
     conv_groups, project_groups, memory_global, memory_orphans = _group_search_hits(
         results.hits, export
@@ -543,6 +603,7 @@ def upload_form() -> str:
 
 @bp.route("/upload", methods=["POST"])
 def upload_post():
+    _refuse_while_inspecting()
     file = request.files.get("export_zip")
     if file is None or not file.filename:
         return render_template("upload.html", error="No file selected."), 400
@@ -603,6 +664,50 @@ def upload_post():
 
 
 # ---------------------------------------------------------------------------
+# Inspect mode (v1.2 Session K)
+# ---------------------------------------------------------------------------
+
+
+@bp.route("/inspect", methods=["GET"])
+def inspect_form() -> str:
+    return render_template("inspect.html", error=None)
+
+
+@bp.route("/inspect", methods=["POST"])
+def inspect_post():
+    """Open an export read-only, without touching the stored one.
+
+    The no-trace rule: the upload is read straight into memory and parsed
+    from there — no tempfile step, no ``cache/`` write, no parse pickle, no
+    history row. A parse failure errors on the Inspect page and leaves the
+    currently viewed export (primary or previously inspected) untouched.
+    """
+    file = request.files.get("export_zip")
+    if file is None or not file.filename:
+        return render_template("inspect.html", error="No file selected."), 400
+    if not file.filename.lower().endswith(".zip"):
+        return render_template("inspect.html", error="File must be a .zip."), 400
+
+    data = file.stream.read()
+    try:
+        export = load_export_from_bytes(data, name=file.filename)
+    except ExportFormatError as e:
+        return render_template("inspect.html", error=f"Couldn't parse archive: {e}"), 400
+
+    begin_inspection(current_app, export, file.filename)
+    return redirect(url_for("viewer.index"))
+
+
+@bp.route("/inspect/exit", methods=["POST"])
+def inspect_exit():
+    """The banner's "Return to my export" control. The primary export stayed
+    resident throughout, so this just discards the inspect state. Harmless
+    no-op when not inspecting."""
+    end_inspection(current_app)
+    return redirect(url_for("viewer.index"))
+
+
+# ---------------------------------------------------------------------------
 # Upload history (v1.1 Session A, item A3)
 # ---------------------------------------------------------------------------
 
@@ -644,7 +749,12 @@ def orphans_view() -> str:
     """Inventory page for tag rows that no longer resolve against the
     current ``Export``. Two buckets: orphan-conv (the conversation is
     missing) and orphan-project (the project is missing). The page is the
-    only purge surface — no other route auto-prunes."""
+    only purge surface — no other route auto-prunes.
+
+    Deliberately reads the PRIMARY export even in inspect mode: tags are
+    primary-export state, and resolving them against an inspected archive
+    would misclassify every row. The purge form is hidden while inspecting
+    (and the purge route refuses)."""
     export: Export = current_app.config["EXPORT"]
     state = compute_tag_state(get_db(), export)
 
@@ -687,6 +797,7 @@ def orphans_purge():
     """Delete every orphan tag row. Gated by an explicit ``confirm=yes``
     field in the form so a stray POST can't wipe state — the orphans
     template's checkbox emits the field only when the user has ticked it."""
+    _refuse_while_inspecting()
     if request.form.get("confirm") != "yes":
         abort(400, "purge requires explicit confirmation")
     export: Export = current_app.config["EXPORT"]
@@ -703,6 +814,7 @@ def orphans_purge():
 
 @bp.route("/tag", methods=["POST"])
 def tag_conversation():
+    _refuse_while_inspecting()
     export: Export = current_app.config["EXPORT"]
     conv_uuid = request.form.get("conversation_uuid", "").strip()
     project_uuid = request.form.get("project_uuid", "").strip() or None
@@ -730,6 +842,7 @@ def tag_conversation():
 @bp.route("/tag/bulk", methods=["POST"])
 def tag_bulk():
     """Bulk-tag, retag, or untag a set of conversations (plan §12 step 4.5)."""
+    _refuse_while_inspecting()
     export: Export = current_app.config["EXPORT"]
     mode = request.form.get("mode", "")
     if mode not in ("tag", "retag", "untag"):

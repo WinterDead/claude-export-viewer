@@ -221,6 +221,44 @@ three sessions (H, I, J) shipped; per-session locked decisions below.
     `docs/briefs/` alongside the brief and committed with the session's work. The Session
     H and I reports were filed retroactively, verbatim.
 
+## v1.2 — in progress
+
+- **Session K** *(shipped)* — simple inspector: read-only inspect mode (brief:
+  `docs/briefs/v1.2-session-k-brief.md`; report: `docs/briefs/v1.2-session-k-report.md`).
+  Locked decisions:
+  - Inspect mode is a view mode only. `viewer/inspect.py` holds an app-global
+    `InspectState` (parsed export, display filename, in-memory FTS connection) under
+    `app.config["INSPECT_STATE"]`. The primary `Export` stays resident in
+    `app.config["EXPORT"]` throughout, so "Return to my export" just discards the inspect
+    state — no reload path runs, and an app restart always comes back on the primary.
+  - The no-trace rule holds structurally: `/inspect` uploads are read straight into memory
+    and parsed by `viewer.parser.load_export_from_bytes` (new public entry point sharing
+    `_parse_zip` with the path loader — same pipeline, same 200 MB cap); the search index
+    is an in-memory SQLite database built by the same `index_export`; nothing is written
+    under `cache/`, no parse pickle, no `upload_history` row. `tests/test_inspect.py` pins
+    `cache/` byte-identical across an inspect session that browses and searches.
+  - Noted boundary (flagged in the report): Werkzeug spools multipart bodies over
+    ~500 KB to an OS temp file during request parsing — pre-existing behaviour of every
+    upload route, deleted at request end, no artifact remains; engineering around it
+    would be a stack change (a Session K hard stop).
+  - Isolation is enforced twice: `_refuse_while_inspecting()` aborts 403 at the top of
+    `/tag`, `/tag/bulk`, `/orphans/purge`, and `/upload` POST, and the templates drop the
+    tag dropdowns, tag filter, bulk bar, row checkboxes, project tag counts, the
+    project-detail tagged section, and the orphan purge form while `g_inspecting`. The
+    Upload page stays in the nav with a notice and a `<fieldset disabled>` form.
+  - Tag semantics stay pinned to the primary export: the orphan-banner count and the
+    `/orphans` page resolve tags against the primary even while inspecting (resolving
+    against an inspected archive would misclassify every row).
+  - Mode signal: `.inspect-banner`, blue (`#e8f1fb` / `#2a6fbb`) — third banner colour
+    after the amber orphan advisory and the red load-error banner — on every page,
+    carrying the byte-exact authored copy and the "Return to my export" POST control.
+  - Help: "Inspecting another export" inserted directly after "Loading an export into the
+    viewer", reflowed to help.md's one-line-per-paragraph convention (the renderer's
+    nl2br would otherwise force line breaks no other section has); "Inspect page" links
+    to `/inspect`. Authored copy pinned byte-exact by `tests/test_inspect.py`.
+  - Accepted: inspect state is app-global, so concurrent tabs share the one inspected
+    view (single-user localhost tool); re-inspecting the same file re-parses.
+
 ## Roadmap (post-v1.1)
 
 Sequenced 2026-07; supersedes the earlier "v1.2 — gate items" list. Definition of done for
@@ -248,9 +286,9 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 
 ### v1.2 — simple inspector + conversation export
 
-- Simple inspector: open, inspect, and close an export that isn't the main one, without
-  touching the real tagging database — swappable export and database paths plus a picker.
-  Ships first within the version; it is the test harness for export.
+- Simple inspector *(shipped — Session K, locked decisions above)*: open, inspect, and
+  close an export that isn't the main one, without touching the real tagging database.
+  Shipped first within the version; it is the test harness for export.
 - Conversation export to file: Markdown as the primary format. For PDF, the working lean is
   the browser's print-to-PDF over a polished print stylesheet rather than a PDF-generation
   dependency — confirm in the design pass, which starts by verifying the current state of

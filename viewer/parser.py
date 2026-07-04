@@ -9,6 +9,7 @@ behaviours covered.
 
 from __future__ import annotations
 
+import io
 import json
 import logging
 import re
@@ -223,6 +224,29 @@ def load_export(source: str | Path | Sequence[str | Path]) -> Export:
     return _merge_batches(parsed)
 
 
+def load_export_from_bytes(data: bytes, *, name: str) -> Export:
+    """Parse a single export archive held entirely in memory.
+
+    Same validation pipeline as :func:`load_export`, but nothing is read
+    from or written to disk — inspect mode (v1.2 Session K) feeds uploaded
+    bytes straight in, honouring its no-trace rule. ``name`` is a display
+    name only (typically the browser-supplied filename); it becomes the
+    single ``source_paths`` entry and feeds the same batch-index warning a
+    path-based load gets.
+    """
+    match = BATCH_FILENAME_RE.search(name)
+    if match and match.group(1) != "0000":
+        logger.warning(
+            "loaded a single archive with batch index %s — earlier batches may be missing",
+            match.group(1),
+        )
+    try:
+        zf_ctx = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as e:
+        raise ExportFormatError(f"not a valid zip archive: {name} ({e})") from e
+    return _parse_zip(zf_ctx, source_name=name)
+
+
 # ---------------------------------------------------------------------------
 # Path resolution.
 # ---------------------------------------------------------------------------
@@ -257,6 +281,13 @@ def _load_one_zip(path: Path) -> Export:
     except zipfile.BadZipFile as e:
         raise ExportFormatError(f"not a valid zip archive: {path} ({e})") from e
 
+    return _parse_zip(zf_ctx, source_name=str(path))
+
+
+def _parse_zip(zf_ctx: zipfile.ZipFile, *, source_name: str) -> Export:
+    """Shared parse body for path-based and in-memory loads. ``source_name``
+    is what lands in ``Export.source_paths`` — a filesystem path for
+    :func:`load_export`, a bare filename for :func:`load_export_from_bytes`."""
     with zf_ctx as zf:
         names = set(zf.namelist())
         for required in ("users.json", "memories.json", "conversations.json"):
@@ -282,7 +313,7 @@ def _load_one_zip(path: Path) -> Export:
         projects=projects,
         conversations=conversations,
         orphan_project_memories=orphan_memories,
-        source_paths=[str(path)],
+        source_paths=[source_name],
     )
 
 

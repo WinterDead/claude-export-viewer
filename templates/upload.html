@@ -15,6 +15,17 @@
     </p>
   </header>
 
+  {% if g_inspecting %}
+    {# Inspect mode (v1.2 Session K): the page stays in the nav, but the
+       form is disabled — Upload replaces the stored export, and the two
+       verbs must never blur. The POST route refuses independently. #}
+    <p class="warn inspect-upload-notice">
+      Uploading is disabled while you're inspecting an export — Upload replaces
+      your stored export, and inspecting never touches it. Use
+      <strong>Return to my export</strong> in the banner first.
+    </p>
+  {% endif %}
+
   {% if error %}
     <p class="warn">{{ error }}</p>
   {% endif %}
@@ -23,16 +34,18 @@
         action="{{ url_for('viewer.upload_post') }}"
         enctype="multipart/form-data"
         class="upload-form">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="upload-form-label" for="export-zip">
-      <span class="upload-form-text">Export ZIP:</span>
-      <input id="export-zip"
-             type="file"
-             name="export_zip"
-             accept=".zip,application/zip"
-             required>
-    </label>
-    <button type="submit" class="upload-submit">Upload &amp; replace</button>
+    <fieldset class="upload-fieldset"{% if g_inspecting %} disabled{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="upload-form-label" for="export-zip">
+        <span class="upload-form-text">Export ZIP:</span>
+        <input id="export-zip"
+               type="file"
+               name="export_zip"
+               accept=".zip,application/zip"
+               required>
+      </label>
+      <button type="submit" class="upload-submit">Upload &amp; replace</button>
+    </fieldset>
   </form>
 
   <p class="upload-hint">

@@ -36,10 +36,12 @@
       {% endif %}
     </p>
 
+    {% if not g_inspecting %}
     <div class="conv-tag">
       {{ tag_form(conv.uuid, current_tag, projects, request.full_path,
                   label='Project', current_tag_orphan=current_tag_orphan) }}
     </div>
+    {% endif %}
   </header>
 
   {% if ignored_overrides %}

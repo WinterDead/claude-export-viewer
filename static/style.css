@@ -1290,6 +1290,57 @@ section h2 {
   font-size: 0.92rem;
 }
 
+/* Inspect-mode banner (v1.2 Session K): the mode signal while a non-primary
+   export is open. Third banner colour — blue, an active-state signal —
+   deliberately distinct from the amber orphan advisory and the red
+   load-error banner. Carries the exit control. */
+.inspect-banner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+  background: #e8f1fb;
+  border-bottom: 1px solid #2a6fbb;
+  color: #163a5f;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.inspect-exit-form {
+  margin: 0;
+}
+
+.inspect-exit-btn {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.7rem;
+  border: 1px solid #2a6fbb;
+  background: white;
+  color: #163a5f;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inspect-exit-btn:hover {
+  background: #d7e7f8;
+}
+
+/* The upload form's controls sit inside a fieldset so inspect mode can
+   disable them all at once; the fieldset itself stays invisible chrome. */
+.upload-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.upload-fieldset[disabled] {
+  opacity: 0.55;
+}
+
 .orphan-banner a {
   color: var(--accent);
   font-weight: 600;
@@ -1482,6 +1533,7 @@ section h2 {
   .search-form,
   .orphan-banner,
   .load-error-banner,
+  .inspect-banner,
   .orphan-purge,
   .upload-form,
   .help-controls {
