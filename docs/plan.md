@@ -258,6 +258,32 @@ three sessions (H, I, J) shipped; per-session locked decisions below.
     to `/inspect`. Authored copy pinned byte-exact by `tests/test_inspect.py`.
   - Accepted: inspect state is app-global, so concurrent tabs share the one inspected
     view (single-user localhost tool); re-inspecting the same file re-parses.
+- **Session L** *(shipped)* — export discovery: design record, content-block census,
+  print-CSS assessment (brief: `docs/briefs/v1.2-session-l-brief.md`; report:
+  `docs/briefs/v1.2-session-l-report.md`). No application code changed (hard stop honoured).
+  Locked decisions and findings:
+  - `docs/export-design.md` committed byte-exact as the chat-authored design record for the
+    conversation-export feature; it is edited only through the same chat-authored channel.
+    Its structural decisions (assemble stored Markdown, browser downloads only, one-line tool
+    cards, thinking default-off, WYSIWYG branch capture) are design-locked pending the
+    implementation sessions' verification matrices.
+  - Census (`tools/scan_content_blocks.py`, `docs/content-block-census.md`): **no unmapped
+    content-block types — the design record's rendering table covers everything observed; no
+    rendering decisions required before Session M.** Four block types only
+    (text/thinking/tool_use/tool_result), two senders, zero truncated/cut-off thinking flags
+    (the flag path is fixture-test territory), all attachments under 100 KB with non-empty
+    extracted text. Artifact command census reproduces the Session D baseline exactly
+    (34 `create` in 28 conversations, zero `update`/`rewrite`) — no format shift.
+  - Naming clarified in passing: the dev copy `data/data.zip` is the older May 2026 archive
+    (`docs/export-schema.md`'s reference); the uploaded export in `cache/` is the current
+    reference export and the generation Session D scanned.
+  - Print assessment (`docs/print-css-assessment.md`): the skeleton's force-open `<details>`
+    hack is dead in modern engines (`::details-content` + `content-visibility: hidden`;
+    verified empirically in the app's own Chromium) — closed thinking/attachment blocks print
+    as unlabelled empty husks, and summary-hiding is cascade-inconsistent. The polish pass is
+    scoped as a recommendation list; its core is deliberate WYSIWYG printing with visible
+    summaries (the design record's thinking-alignment requirement) and an explicit
+    do-not-resurrect note for blanket force-open via the modern pseudo-element.
 
 ## Roadmap (post-v1.1)
 
@@ -289,14 +315,14 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 - Simple inspector *(shipped — Session K, locked decisions above)*: open, inspect, and
   close an export that isn't the main one, without touching the real tagging database.
   Shipped first within the version; it is the test harness for export.
-- Conversation export to file: Markdown as the primary format. For PDF, the working lean is
-  the browser's print-to-PDF over a polished print stylesheet rather than a PDF-generation
-  dependency — confirm in the design pass, which starts by verifying the current state of
-  print styling (its existence is a genesis-era claim, never verified as shipped). The design
-  pass also covers format details, single vs bulk, branch handling, thinking blocks, tool
-  cards, and a privacy review, all before any implementation brief. A copy-whole-conversation
-  control (clipboard rather than file) is a design-pass candidate riding the same
-  serialisation.
+- Conversation export to file: Markdown as the primary format. The design pass is complete —
+  `docs/export-design.md` is the design record (Session L, locked decisions above), and its
+  two discovery prerequisites (content-block census, print-CSS assessment) are met with no
+  open rendering decisions. Remaining v1.2 work: the serializer implementation
+  (Session M, per the design record) and the print-polish pass scoped by
+  `docs/print-css-assessment.md` (which also confirms print-to-PDF over a PDF-generation
+  dependency remains the right lean). A copy-whole-conversation control (clipboard rather
+  than file) rides the serializer; its inclusion is decided in the implementation brief.
 
 ### v1.2.5 — public release
 
