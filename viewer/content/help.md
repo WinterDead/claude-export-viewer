@@ -63,6 +63,30 @@ The full reading view. Messages are labelled **User** and **Assistant** and visu
 
 When a message was regenerated or edited in the original conversation, the conversation has branch points. A switcher appears at each one, showing the sibling responses; the currently shown branch is marked. Clicking a sibling reloads the page on that branch — the URL captures your branch choices, so a link to a specific branch combination can be bookmarked or shared between your own notes. Search results that match a message on an alternate branch link straight to that branch.
 
+## Exporting conversations
+
+Any conversation can be downloaded as a Markdown file — the message text exactly as stored, with a small metadata header (title, dates, message count, your project tag if you've set one) and clearly labelled markers for everything else: tool activity, attachments, branch points, and anything not included.
+
+### Single conversations
+
+On a conversation's page, use **Export**. The file captures the branch combination you're currently viewing — switch branches first if you want a different path. Two checkboxes control the contents: **Include thinking blocks** (off by default — Claude's reasoning is often the most sensitive part of a conversation) and **Include attachment text** (on by default; untick it to keep attachments as one-line references).
+
+### Exporting a selection
+
+In the conversations list, select rows the usual way and choose **Export selected** from the action bar: you get a ZIP with one Markdown file per conversation, each following its default branch path. The filter makes short work of "everything in project X" — filter, select, export.
+
+### Copying instead of downloading
+
+**Copy conversation** on a conversation's page puts the same Markdown on your clipboard (without the metadata header) — handy for pasting into notes or another chat.
+
+### What the file admits
+
+Exports are honest about omissions: if thinking was left out, the header says so; attachments reduced to references say so; and every branch point on the exported path is marked with how many alternate responses exist. An export is the conversation as a document, not a copy of the whole tree.
+
+### Printing and PDF
+
+**Print / Save as PDF** on a conversation's page opens your browser's print dialog — choose "Save as PDF" there for a PDF copy. Printing is what-you-see-is-what-you-get: collapsed sections (like thinking blocks) print as their one-line summaries unless you've expanded them, and a Links section at the end lists the full address of every link in the conversation.
+
 ## Projects
 
 The **Projects** page lists every project in the export. Each project's detail page shows its description, its custom instructions, its knowledge documents (rendered in full), its project-specific memory, and the conversations you've tagged into it. Project pages are read-only — tagging happens from the conversations list.

@@ -426,9 +426,14 @@ def test_tag_ui_absent_and_upload_disabled_in_inspect_mode(app_factory, inspect_
     convs = client.get("/conversations").get_data(as_text=True)
     assert "tag-form" not in convs  # per-row dropdowns
     assert "tag-filter" not in convs  # filter control
-    assert "bulk-form" not in convs and "bulk-bar" not in convs  # bulk action bar
-    assert "conv-checkbox" not in convs  # row selection
-    assert "bulk_tag.js" not in convs  # controller not even loaded
+    # Since v1.2 Session N the action bar (and its row checkboxes and
+    # controller) is PRESENT in inspect mode, carrying only the non-mutating
+    # export action — every tagging control stays structurally absent.
+    assert "bulk-form" in convs and "conv-checkbox" in convs
+    assert "bulk-project-picker" not in convs
+    assert "Tag selected" not in convs
+    assert "Untag selected" not in convs
+    assert "Export selected" in convs
 
     from viewer.inspect import get_inspection
 

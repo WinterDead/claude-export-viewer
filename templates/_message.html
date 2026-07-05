@@ -43,8 +43,13 @@
           </span>
         </aside>
       {% else %}
+        {# Preserve-and-flag placeholder: the parser kept the block as an
+           UnknownBlock carrying its raw type, so the card can name it. #}
         <aside class="block-card block-unknown">
           <span class="block-card-tag">{{ bt }}</span>
+          {% if block.type is defined and block.type %}
+            <span class="block-card-name">{{ block.type }}</span>
+          {% endif %}
         </aside>
       {% endif %}
     {% endfor %}

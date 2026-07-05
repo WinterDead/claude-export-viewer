@@ -48,6 +48,13 @@ The in-app help page, with one section expanded:
 - **Upload history.** Every export load is recorded — when, the filename, a content
   fingerprint, and the headline counts — so over time it doubles as a record of how your
   archive has grown.
+- **Inspect mode** — open a second export read-only, without touching your own data, tags, or
+  history; one click returns you to your own archive.
+- **Conversation export** — download any conversation as Markdown (single files or a bulk ZIP
+  of a selection), with a YAML metadata header and honest markers for anything omitted;
+  thinking blocks are opt-in.
+- **Print and PDF** — print or save any conversation as PDF from the browser, with a links
+  appendix and what-you-see-is-what-you-get handling of collapsed sections.
 - **Thinking blocks** — Claude's reasoning is preserved and rendered as collapsible sections
   within each conversation, flagged where the export marks a block truncated or cut off.
 - **Syntax-highlighted code blocks**, via a vendored copy of highlight.js (no CDN).

@@ -3,6 +3,11 @@
 
 {% block title %}{{ conv | display_title }} — Claude Export Viewer{% endblock %}
 
+{% block extra_head %}
+  <script src="{{ url_for('static', filename='conv_actions.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='print_links.js') }}" defer></script>
+{% endblock %}
+
 {% block content %}
 <section class="conv-detail">
   <p class="breadcrumb">
@@ -42,6 +47,40 @@
                   label='Project', current_tag_orphan=current_tag_orphan) }}
     </div>
     {% endif %}
+
+    {# Export / copy / print controls (v1.2 Session N). The GET form re-emits
+       the page's branch parameters, so the export is WYSIWYG — the same
+       combination this page is showing. Each checkbox is followed by a
+       hidden fallback carrying 0: unticked submits an explicit off instead
+       of nothing (absent means "use the default" at the endpoint, which is
+       wrong once the user unticks a default-on box). The checkbox must come
+       FIRST — the endpoint reads the first submitted value. #}
+    <div class="conv-actions">
+      <form method="get"
+            action="{{ url_for('viewer.conversation_export', uuid=conv.uuid) }}"
+            class="export-form" id="export-form">
+        {% for b in request.args.getlist('branch') %}
+          <input type="hidden" name="branch" value="{{ b }}">
+        {% endfor %}
+        <label class="export-option">
+          <input type="checkbox" name="thinking" value="1">
+          <input type="hidden" name="thinking" value="0">
+          Include thinking blocks
+        </label>
+        <label class="export-option">
+          <input type="checkbox" name="attachments" value="1" checked>
+          <input type="hidden" name="attachments" value="0">
+          Include attachment text
+        </label>
+        <button type="submit" class="export-btn">Export</button>
+        <button type="button" class="copy-btn"
+                data-export-url="{{ url_for('viewer.conversation_export', uuid=conv.uuid) }}">
+          Copy conversation
+        </button>
+        <span class="copy-confirm" role="status" hidden>Copied</span>
+        <button type="button" class="print-btn">Print / Save as PDF</button>
+      </form>
+    </div>
   </header>
 
   {% if ignored_overrides %}
@@ -61,8 +100,12 @@
         {% if msg.uuid in switchers %}
           {% set siblings = switchers[msg.uuid] %}
           <nav class="branch-switcher" aria-label="Sibling responses">
+            {# Pluralised per the Session N brief (C2). The colon belongs to
+               the on-screen option list, so it sits in its own span and is
+               hidden in print, where only this label line survives (B2). #}
             <span class="branch-label">
-              Branch point — {{ siblings | length }} sibling responses:
+              Branch point — {{ siblings | length }} sibling
+              response{% if siblings | length != 1 %}s{% endif %}<span class="branch-label-colon">:</span>
             </span>
             <ol class="branch-options">
               {% for sib in siblings %}

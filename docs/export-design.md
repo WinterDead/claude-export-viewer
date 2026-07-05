@@ -40,7 +40,7 @@ uuid: <conversation uuid>
 created: <ISO 8601, from the export>
 updated: <ISO 8601, from the export>
 messages: <count on the exported path>
-project: "<viewer tag label>"        # only when the conversation is tagged to a project
+project: "<viewer tag label>"        # when tagged, including the No Project sentinel (exported as its label)
 branch_points: <N>                    # only when the conversation has branch points
 thinking: included | omitted          # only when the conversation has thinking blocks
 attachments: included | referenced    # only when the conversation has attachments
@@ -91,8 +91,10 @@ All rendered as single-line labelled blockquotes unless stated, mirroring the re
 - **Single-conversation export captures the branch combination currently displayed** — pure
   WYSIWYG; the existing URL-branch machinery already defines "what you're looking at," so no
   new semantics are introduced.
-- At each branch point on the exported path, an annotation:
-  `> **[Branch point]** <N> alternate response(s) exist and are not included in this file.`
+- At each branch point on the exported path, an annotation — singular:
+  `> **[Branch point]** 1 alternate response exists and is not included in this file.`
+  Plural:
+  `> **[Branch point]** <N> alternate responses exist and are not included in this file.`
 - **Bulk export takes the default branch path** per conversation, with the same annotations.
 - **Provisional status** (operator, 2026-07): this approach ships in v1.2, but the operator
   is deliberately reserving judgment until real-world use. A branch-selection control at

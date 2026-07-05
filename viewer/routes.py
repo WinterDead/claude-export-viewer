@@ -56,7 +56,14 @@ from viewer.render import (
 )
 from viewer.search import SearchHit, index_export, search
 from viewer.state import compute_tag_state, purge_orphan_tags
-from viewer.tagging import NO_PROJECT_SENTINEL, all_tags, get_tag, set_tag, tags_for_project
+from viewer.tagging import (
+    NO_PROJECT_LABEL,
+    NO_PROJECT_SENTINEL,
+    all_tags,
+    get_tag,
+    set_tag,
+    tags_for_project,
+)
 
 bp = Blueprint("viewer", __name__)
 
@@ -348,15 +355,18 @@ def _export_project_label(conv_uuid: str) -> str | None:
     ``None`` means the field is absent. Tags are primary-export state
     (v1.2 Session K), so while inspecting no tag is consulted at all —
     pairing YOUR tag rows with an inspected export's conversations is never
-    meaningful. The No-Project sentinel is not a project, so it carries no
-    label; an orphan tag (project no longer in the archive) has no label to
-    resolve.
+    meaningful. The No-Project sentinel exports as its display label
+    (operator decision, Session N — the triage record is authored work and
+    belongs in a full export); an orphan tag (project no longer in the
+    archive) has no label to resolve, so it stays field-absent.
     """
     if get_inspection(current_app) is not None:
         return None
     tag = get_tag(get_db(), conv_uuid)
-    if not tag or tag == NO_PROJECT_SENTINEL:
+    if not tag:
         return None
+    if tag == NO_PROJECT_SENTINEL:
+        return NO_PROJECT_LABEL
     primary: Export = current_app.config["EXPORT"]
     project = next((p for p in primary.projects if p.uuid == tag), None)
     return project.name if project is not None else None
@@ -371,6 +381,9 @@ def conversation_export(uuid: str):
     construction — the document is assembled in memory and returned as a
     browser download, so the route works while inspecting (a primary use
     case) and never writes server-side.
+
+    ``frontmatter=0`` (Session N) drops the YAML header — the copy control
+    fetches this form for the clipboard; the H1 title stays either way.
     """
     export = _current_export()
     conv = next((c for c in export.conversations if c.uuid == uuid), None)
@@ -384,6 +397,7 @@ def conversation_export(uuid: str):
         _export_options(request.args),
         project_label=_export_project_label(uuid),
         exported_on=date.today(),
+        include_frontmatter=_export_flag(request.args.get("frontmatter"), True),
     )
     response = Response(document, mimetype="text/markdown")
     response.headers["Content-Disposition"] = f'attachment; filename="{export_filename(conv)}"'

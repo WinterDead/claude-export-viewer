@@ -73,7 +73,23 @@ class ToolResultBlock:
     inner: list[dict[str, Any]]
 
 
-ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock
+# Preserve-and-flag slot for content-block types this parser doesn't know
+# (house rule — see CLAUDE.md). ``type`` is the raw type string from the
+# export (empty when the record carried none); ``raw`` is the whole block
+# record, untouched, so nothing is lost if a future version learns to render
+# it. The repr deliberately omits ``raw`` — same reason Message hides its
+# content: unknown blocks may carry conversation text, which must stay out
+# of stack traces and log lines.
+@dataclass(frozen=True, slots=True, repr=False)
+class UnknownBlock:
+    type: str
+    raw: dict[str, Any]
+
+    def __repr__(self) -> str:
+        return f"UnknownBlock(type={self.type!r}, raw_keys={len(self.raw)})"
+
+
+ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock | UnknownBlock
 
 
 @dataclass(frozen=True, slots=True)
@@ -497,11 +513,9 @@ def _parse_message(raw: dict[str, Any], seen_warnings: set[str]) -> Message:
         logger.warning("unknown sender value: %r", sender)
         seen_warnings.add(f"sender:{sender}")
 
-    parsed_content: list[ContentBlock] = []
-    for blk in raw.get("content") or []:
-        block = _parse_content_block(blk, seen_warnings)
-        if block is not None:
-            parsed_content.append(block)
+    parsed_content: list[ContentBlock] = [
+        _parse_content_block(blk, seen_warnings) for blk in raw.get("content") or []
+    ]
 
     parent_norm = _normalise_parent(raw.get("parent_message_uuid"))
 
@@ -527,7 +541,7 @@ def _normalise_parent(value: Any) -> str | None:
     return str(value)
 
 
-def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> ContentBlock | None:
+def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> ContentBlock:
     block_type = raw.get("type")
 
     if block_type == "text":
@@ -559,11 +573,14 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
             inner=raw.get("content") or [],
         )
 
+    # Preserve-and-flag (house rule): the block travels with the message as
+    # an UnknownBlock so the reading view and the export can render their
+    # named placeholders, instead of the content silently vanishing.
     key = f"unknown_block:{block_type}"
     if key not in seen_warnings:
-        logger.warning("unknown content block type %r — dropped", block_type)
+        logger.warning("unknown content block type %r — preserved as UnknownBlock", block_type)
         seen_warnings.add(key)
-    return None
+    return UnknownBlock(type=str(block_type) if block_type is not None else "", raw=raw)
 
 
 def _parse_attachment(raw: dict[str, Any]) -> Attachment:

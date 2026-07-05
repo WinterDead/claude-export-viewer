@@ -1,10 +1,15 @@
-// Bulk-tag controller for /conversations (plan §12 step 4.5).
+// Bulk-action controller for /conversations (plan §12 step 4.5; export
+// action added in v1.2 Session N).
 //
 // Responsibilities:
 //   - show/hide the sticky action bar based on whether anything is selected
 //   - update count and the "K already tagged" indicator
-//   - enable/disable Tag, Retag, Untag buttons appropriately
+//   - enable/disable Tag, Retag, Untag, and Export selected appropriately
 //   - shift-click range select on the row checkboxes
+//
+// In inspect mode the bar carries only the Export selected action — the
+// tagging controls are structurally absent from the template, so every
+// tagging-related reference below is null-guarded.
 //
 // The form-attribute trick (`form="bulk-form"` on each checkbox) means the
 // browser includes selected uuids in the bulk-form submission automatically;
@@ -25,20 +30,28 @@
   const btnTag = bar.querySelector(".bulk-btn-tag");
   const btnRetag = bar.querySelector(".bulk-btn-retag");
   const btnUntag = bar.querySelector(".bulk-btn-untag");
+  const btnExport = bar.querySelector(".bulk-btn-export");
 
   let lastClicked = null;
 
   function update() {
     const selected = checkboxes.filter((c) => c.checked);
     const n = selected.length;
-    const alreadyTagged = selected.filter((c) => {
-      const row = c.closest(".conv-row");
-      return row && row.dataset.tagged;
-    }).length;
 
     bar.dataset.count = String(n);
     countEl.textContent = `${n} selected`;
     countEl.dataset.count = String(n);
+
+    if (btnExport) {
+      btnExport.disabled = n === 0;
+    }
+
+    if (!picker) return; // inspect mode — no tagging controls in the bar
+
+    const alreadyTagged = selected.filter((c) => {
+      const row = c.closest(".conv-row");
+      return row && row.dataset.tagged;
+    }).length;
 
     if (alreadyTagged > 0) {
       alreadyEl.textContent = `${alreadyTagged} already tagged`;
@@ -75,7 +88,9 @@
     });
   });
 
-  picker.addEventListener("change", update);
+  if (picker) {
+    picker.addEventListener("change", update);
+  }
 
   // Initial paint (handles BFCache restores where checkboxes may already be set).
   update();

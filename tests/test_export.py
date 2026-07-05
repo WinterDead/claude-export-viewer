@@ -1,8 +1,8 @@
 """Conversation export (v1.2 Session M): serializer + download endpoints.
 
 Covers the brief's fourteen test areas at the HTTP level, using the synthetic
-fixture plus in-memory "exotic" conversations for situations a parsed archive
-cannot produce (unknown senders, unknown block objects, truncated/cut-off
+fixture plus in-memory "exotic" conversations for situations the fixture
+doesn't carry (unknown senders, unknown block objects, truncated/cut-off
 thinking flags, unpaired tool calls, error results, untitled conversations,
 filename collisions). A handful of serializer-level unit tests pin behaviour
 the endpoints can't reach directly (YAML escaping, the dormant standalone
@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from viewer.db import get_db
 from viewer.export import (
     ExportOptions,
     bulk_zip_filename,
@@ -39,6 +40,7 @@ from viewer.parser import (
     ToolUseBlock,
     load_export,
 )
+from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, set_tag
 
 # ---------------------------------------------------------------------------
 # Synthetic-fixture uuids (tests/fixtures/build_fixtures.py).
@@ -52,9 +54,11 @@ BRANCH_B = "00000000-0000-0000-0000-0000000000f4"
 PROJECT_A = "00000000-0000-0000-0000-0000000000a1"
 
 # ---------------------------------------------------------------------------
-# Exotic conversations, constructed directly (a parsed archive can't produce
-# these: the parser drops unknown blocks, and the census found zero flagged
-# thinking blocks — fixture territory by necessity, per the brief).
+# Exotic conversations, constructed directly (the census found zero flagged
+# thinking blocks in real data, and the committed fixture doesn't carry the
+# other oddities — in-memory territory per the Session M brief). Since
+# Session N the parser also preserves unknown raw block types, so the
+# parsed-archive path is exercised separately below.
 # ---------------------------------------------------------------------------
 
 TS = datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC)
@@ -411,6 +415,24 @@ def test_frontmatter_h1_title_follows(client) -> None:
     assert "\n\n# Synthetic minimal conversation\n" in doc
 
 
+def test_sentinel_tag_exports_no_project_label(client) -> None:
+    """C1 (Session N, operator decision): a conversation tagged No Project
+    exports with ``project: "No Project"`` — the triage record is authored
+    work and belongs in a full export."""
+    _tag(client, CONV_MINIMAL, NO_PROJECT_SENTINEL)
+    fields = _frontmatter(_get_doc(client, CONV_MINIMAL))
+    assert fields["project"] == f'"{NO_PROJECT_LABEL}"'
+
+
+def test_orphan_tag_stays_field_absent(client) -> None:
+    """C1's carve-out: an orphan tag (project uuid no longer in the archive)
+    has no label to resolve, so the field stays absent — as shipped."""
+    with client.application.app_context():
+        set_tag(get_db(), CONV_MINIMAL, "00000000-0000-0000-0000-00000000dead")
+    fields = _frontmatter(_get_doc(client, CONV_MINIMAL))
+    assert "project" not in fields
+
+
 # ---------------------------------------------------------------------------
 # 2. Sender headings
 # ---------------------------------------------------------------------------
@@ -557,12 +579,34 @@ def test_unknown_block_placeholder_falls_back_to_class_name() -> None:
     assert "> **[Unrecognised content block: object]**" in doc
 
 
+def test_unknown_block_from_parsed_archive_reaches_both_placeholders(
+    fixtures_dir: Path, tmp_path: Path
+) -> None:
+    """Task D reachability (v1.2 Session N): the parser preserves unknown raw
+    block types, so a real archive's unknown block reaches the reading view's
+    placeholder card AND the export's placeholder line — neither path is
+    dormant any more."""
+    app = create_app(fixtures_dir / "bad_unknown_block.zip", db_path=tmp_path / "viewer.sqlite")
+    client = app.test_client()
+
+    page = client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
+    assert "block-unknown" in page
+    assert "speculation" in page  # the raw type is named on the card
+
+    doc = _get_doc(client, CONV_MINIMAL)
+    assert "> **[Unrecognised content block: speculation]**" in doc
+    # The raw record's content stays out of the export (placeholder only).
+    assert "Should be skipped with a warning." not in doc
+
+
 # ---------------------------------------------------------------------------
 # 8. Branches
 # ---------------------------------------------------------------------------
 
+# Byte-exact per the Session N brief (C2) — singular form; the fixture's
+# branch point has exactly one alternate.
 BRANCH_ANNOTATION = (
-    "> **[Branch point]** 1 alternate response(s) exist and are not included in this file."
+    "> **[Branch point]** 1 alternate response exists and is not included in this file."
 )
 
 
@@ -601,6 +645,37 @@ def test_non_branching_conversation_has_no_annotation_or_field(client) -> None:
     doc = _get_doc(client, CONV_MINIMAL)
     assert "[Branch point]" not in doc
     assert "branch_points" not in _frontmatter(doc)
+
+
+def test_branch_annotation_plural_form() -> None:
+    """C2 (Session N): the plural annotation, byte-exact — a branch point
+    with three children exports two alternates."""
+    t0, t1, t2, t3 = (
+        datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC),
+        datetime(2026, 3, 1, 12, 1, 0, tzinfo=UTC),
+        datetime(2026, 3, 1, 12, 2, 0, tzinfo=UTC),
+        datetime(2026, 3, 1, 12, 3, 0, tzinfo=UTC),
+    )
+    root = _mk_msg("ex-pl-1", "human", None, [TextBlock("Q?")], created=t0)
+    kids = [
+        _mk_msg(f"ex-pl-{i}", "assistant", "ex-pl-1", [TextBlock(f"A{i}.")], created=t)
+        for i, t in (("2", t1), ("3", t2), ("4", t3))
+    ]
+    conv = Conversation(
+        uuid="ex-plural",
+        title="Three-way branch",
+        summary="",
+        created_at=t0,
+        updated_at=t3,
+        messages=[root, *kids],
+        children_by_uuid={"ex-pl-1": ["ex-pl-2", "ex-pl-3", "ex-pl-4"]},
+        canonical_path=["ex-pl-1", "ex-pl-4"],
+        branch_points=["ex-pl-1"],
+    )
+    doc = serialise_conversation(conv, conv.canonical_path)
+    assert (
+        "> **[Branch point]** 2 alternate responses exist and are not included in this file." in doc
+    )
 
 
 # ---------------------------------------------------------------------------

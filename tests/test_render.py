@@ -457,7 +457,12 @@ def test_block_type_classifies_each_concrete_block() -> None:
 
 
 def test_block_type_returns_unknown_for_other_objects() -> None:
+    from viewer.parser import UnknownBlock
+
     assert block_type("not a block") == "unknown"
+    # The preserved unknown-block slot (v1.2 Session N) dispatches to the
+    # same template branch; the card names the raw type itself.
+    assert block_type(UnknownBlock(type="voice_note", raw={})) == "unknown"
 
 
 # ---------------------------------------------------------------------------

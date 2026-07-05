@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "claude-export-viewer"
-version = "1.1.5"
+version = "1.2.0"
 description = "Local web app for reading Claude.ai data exports"
 requires-python = ">=3.11"
 dependencies = [

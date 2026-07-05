@@ -221,7 +221,9 @@ three sessions (H, I, J) shipped; per-session locked decisions below.
     `docs/briefs/` alongside the brief and committed with the session's work. The Session
     H and I reports were filed retroactively, verbatim.
 
-## v1.2 — in progress
+## v1.2 — shipped (closed)
+
+Tagged `v1.2.0`. All four sessions (K–N) shipped; per-session locked decisions below.
 
 - **Session K** *(shipped)* — simple inspector: read-only inspect mode (brief:
   `docs/briefs/v1.2-session-k-brief.md`; report: `docs/briefs/v1.2-session-k-report.md`).
@@ -316,7 +318,59 @@ three sessions (H, I, J) shipped; per-session locked decisions below.
     fallback.
   - The branch annotation's `response(s)` is exported as literal spec text for any N;
     flagged for Session N as candidate copy polish. The copy-whole-conversation control
-    remains undecided and falls to Session N with the rest of the UI.
+    remains undecided and falls to Session N with the rest of the UI. *(Both resolved in
+    Session N — see below.)*
+- **Session N** *(shipped)* — export UI, print polish, copy fixes, parser alignment,
+  README/help, close-out (brief: `docs/briefs/v1.2-session-n-brief.md`; report:
+  `docs/briefs/v1.2-session-n-report.md`). Version bumped to 1.2.0; tagged `v1.2.0`.
+  Locked decisions:
+  - Detail-page Export control is a plain GET form to the single-export endpoint,
+    re-emitting the page's `branch` parameters (WYSIWYG). Both export surfaces use
+    checkbox + hidden-0 pairs with the checkbox FIRST: the endpoints read the first
+    submitted value, so unticking submits an explicit off instead of falling back to the
+    default. Labels byte-exact — **Include thinking blocks** (unchecked), **Include
+    attachment text** (checked) — and template-level test-pinned.
+  - The conversations-list action bar now renders in inspect mode carrying only
+    **Export selected** (via `formaction` to the bulk endpoint; the form's default action
+    switches to the export endpoint while inspecting). Row checkboxes render in both modes
+    (aria-label neutralised to "Select conversation"); `bulk_tag.js` null-guards the
+    tagging controls, which stay structurally absent while inspecting (Session K contract
+    updated in `tests/test_inspect.py` for exactly this action).
+  - **Copy conversation shipped** (resolving the design record's copy-control candidate):
+    clipboard delivery of the single-export output for the current branch combination and
+    checkbox states, without frontmatter. `serialise_conversation` gained
+    `include_frontmatter` (default true; query parameter `frontmatter=0` on the GET
+    endpoint); the H1 title stays either way. Brief "Copied" confirmation; wiring in
+    `static/conv_actions.js` (which also hosts the **Print / Save as PDF** button's
+    `window.print()`).
+  - Print polish (all operator-ratified): **deliberate WYSIWYG** — both old `<details>`
+    print rules deleted; the assessment's do-not-resurrect note is binding and test-pinned
+    (comments stripped, no `::details-content` rule anywhere). Branch switchers print
+    their pluralised label line only (option list and the colon-span hidden); message
+    timestamps don't print (operator-chosen None default; the None/Absolute/Relative
+    toggle is deliberately not built — queued for 1.2.6+); `pre` wraps instead of
+    clipping; `.memory-block-controls` and the new `.conv-actions` hidden; the no-op
+    `section` break rule pruned; chrome hide-list and flattened message styling kept.
+  - Links appendix (`static/print_links.js`): print-only `[N]` markers after content
+    links (`.markdown-body` scope) and a "Links" section at the end of the conversation,
+    `N. <link text> — <full URL>`, repeated URLs sharing one number. Built on page load
+    and rebuilt on `beforeprint`, so links inside collapsed sections appear only if the
+    section is open at print time — consistent with WYSIWYG. Screen rendering unchanged
+    (`.print-link-marker`/`.print-links` are `display: none` outside print).
+  - C1 (operator decision): a conversation tagged **No Project** exports with
+    `project: "No Project"`; orphan tags and inspect mode stay field-absent.
+    `docs/export-design.md`'s `project` comment amended byte-exact.
+  - C2: the branch annotation is properly pluralised on both surfaces (export
+    annotation and print label line, byte-exact per the brief); design record amended.
+  - Task D: the parser **preserves** unknown content-block types as
+    `UnknownBlock(type, raw)` (repr hides `raw` — house rule), with the WARNING retained
+    ("preserved as UnknownBlock"). Both placeholder paths are reachable from a parsed
+    archive and test-pinned: the reading view's card now names the raw type; the export
+    emits `[Unrecognised content block: <type>]`.
+  - README gained the three authored feature bullets (inspect mode, conversation export,
+    print/PDF; lead terms bolded to match the list convention — mechanical soft gate);
+    help.md gained the authored "Exporting conversations" section directly after
+    "Reading a conversation". Both verified claim-by-claim (report matrix).
 
 ## Roadmap (post-v1.1)
 
@@ -349,13 +403,11 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   close an export that isn't the main one, without touching the real tagging database.
   Shipped first within the version; it is the test harness for export.
 - Conversation export to file: Markdown as the primary format. The design pass is complete —
-  `docs/export-design.md` is the design record (Session L, locked decisions above) — and the
-  serializer plus both download endpoints shipped in Session M (locked decisions above).
-  Remaining v1.2 work (Session N): the UI entry points (detail-page Export control and the
-  list's "Export selected" action), the print-polish pass scoped by
-  `docs/print-css-assessment.md` (which also confirms print-to-PDF over a PDF-generation
-  dependency remains the right lean), the README/help updates, and the
-  copy-whole-conversation decision (clipboard rather than file — inclusion still undecided).
+  `docs/export-design.md` is the design record (Session L, locked decisions above) — the
+  serializer plus both download endpoints shipped in Session M, and Session N shipped the
+  rest (locked decisions above): the UI entry points, the print-polish pass scoped by
+  `docs/print-css-assessment.md`, the README/help updates, and the copy control (shipped —
+  clipboard delivery, frontmatter off). The version closed with the `v1.2.0` tag.
 
 ### v1.2.5 — public release
 
@@ -370,8 +422,15 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 
 ### Later (unscheduled, non-blocking)
 
-Order between the two is undecided until development resumes; the current lean is portable
-tag state first.
+- **1.2.6+ patch series (reserved — recorded prominently so it isn't forgotten between
+  work windows).** UI and flow tweaks from lived use; expected one or two releases, up to
+  four reserved before 1.3+. Currently queued: the **print timestamp toggle**
+  (None / Absolute / Relative — None shipped as Session N's fixed default) and the
+  **link-appendix mode toggle** (appendix / inline URLs / none — appendix shipped as the
+  fixed default), plus whatever lived use surfaces.
+
+Order between the two larger items below is undecided until development resumes; the
+current lean is portable tag state first.
 
 - Artifact + file-tools extraction. Blocked behind a manufactured test corpus: deliberately
   create artifacts of every type — edit histories, rewrites, branch divergence — export, and

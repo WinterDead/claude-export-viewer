@@ -4,9 +4,7 @@
 {% block title %}Conversations — Claude Export Viewer{% endblock %}
 
 {% block extra_head %}
-  {% if not g_inspecting %}
-    <script src="{{ url_for('static', filename='bulk_tag.js') }}" defer></script>
-  {% endif %}
+  <script src="{{ url_for('static', filename='bulk_tag.js') }}" defer></script>
 {% endblock %}
 
 {% block content %}
@@ -21,18 +19,23 @@
   {# Bulk action bar — managed by static/bulk_tag.js. The form attribute on
      each per-row checkbox associates it with this form despite not being
      nested under it, so checked uuids are submitted automatically.
-     Absent in inspect mode (v1.2 Session K): every action it offers is
-     mutating. Sessions M/N's non-mutating export actions will re-introduce
-     a bar for inspect-mode pages. #}
-  {% if not g_inspecting %}
+     In inspect mode (v1.2 Sessions K/N) the tagging controls are
+     structurally absent and the bar carries only the non-mutating
+     "Export selected" action — exporting from an inspected archive is a
+     primary use case. The export checkbox/hidden pairs put the checkbox
+     FIRST so a ticked box's 1 wins over its explicit-0 fallback (the
+     endpoint reads the first submitted value); unticked therefore submits
+     an explicit off rather than falling back to the default. #}
   <form id="bulk-form"
         method="post"
-        action="{{ url_for('viewer.tag_bulk') }}"
+        action="{{ url_for('viewer.conversation_export_bulk') if g_inspecting
+                   else url_for('viewer.tag_bulk') }}"
         class="bulk-bar"
         data-count="0">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="hidden" name="next" value="{{ request.full_path }}">
     <span class="bulk-count" data-count="0">0 selected</span>
+    {% if not g_inspecting %}
+    <input type="hidden" name="next" value="{{ request.full_path }}">
     <span class="bulk-already-tagged" data-count="0" hidden></span>
     <select name="project_uuid" class="bulk-project-picker" aria-label="Pick a project">
       <option value="">Pick a project…</option>
@@ -55,8 +58,25 @@
             class="bulk-btn bulk-btn-untag" disabled>
       Untag selected
     </button>
+    {% endif %}
+    <span class="bulk-export-options">
+      <label class="export-option">
+        <input type="checkbox" name="thinking" value="1">
+        <input type="hidden" name="thinking" value="0">
+        Include thinking blocks
+      </label>
+      <label class="export-option">
+        <input type="checkbox" name="attachments" value="1" checked>
+        <input type="hidden" name="attachments" value="0">
+        Include attachment text
+      </label>
+      <button type="submit"
+              formaction="{{ url_for('viewer.conversation_export_bulk') }}"
+              class="bulk-btn bulk-btn-export" disabled>
+        Export selected
+      </button>
+    </span>
   </form>
-  {% endif %}
 
   <div class="list-controls">
     <nav class="sort-toggle" aria-label="Sort order">
@@ -111,14 +131,15 @@
     <ul class="conv-list">
       {% for c in conversations %}
         <li class="conv-row" data-tagged="{{ tags.get(c.uuid, '') }}">
-          {% if not g_inspecting %}
+          {# The checkbox drives every bulk action — tagging and export in
+             normal mode, export only while inspecting — so it renders in
+             both modes (v1.2 Session N). #}
           <input type="checkbox"
                  form="bulk-form"
                  name="conversation_uuid"
                  value="{{ c.uuid }}"
                  class="conv-checkbox"
-                 aria-label="Select for bulk tagging">
-          {% endif %}
+                 aria-label="Select conversation">
           <div class="conv-row-main">
             <a class="conv-title-link"
                href="{{ url_for('viewer.conversation_detail', uuid=c.uuid) }}">

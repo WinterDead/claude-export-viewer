@@ -1,8 +1,9 @@
 /* Claude Export Viewer — base stylesheet.
  *
- * Minimal v0 layout. Expanded as templates evolve. The @media print block at
- * the bottom is the print-friendly skeleton flagged in plan §11; treat it as
- * a working baseline, not a placeholder, and grow it alongside each new view.
+ * Minimal v0 layout. Expanded as templates evolve. The print block at the
+ * bottom was polished in v1.2 Session N (deliberate WYSIWYG for collapsed
+ * sections — see docs/print-css-assessment.md before changing it) and grows
+ * alongside each new view.
  */
 
 :root {
@@ -594,6 +595,77 @@ section h2 {
 
 .conv-detail .conv-tag {
   margin-top: 0.6rem;
+}
+
+/* ---------- Export / copy / print controls (v1.2 Session N) ---------- */
+
+.conv-actions {
+  margin-top: 0.75rem;
+}
+
+.export-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.export-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.export-btn,
+.copy-btn,
+.print-btn {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  background: white;
+  color: var(--fg);
+}
+
+.export-btn {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.copy-confirm {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+/* The bar's export cluster sits after the tagging actions; the border
+   separates the two action families when both are present. */
+.bulk-export-options {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem 0.85rem;
+  flex-wrap: wrap;
+}
+
+/* Separator only when the tagging controls precede the cluster (i.e. not
+   in inspect mode, where export is the bar's only action). */
+.bulk-project-picker ~ .bulk-export-options {
+  padding-left: 0.85rem;
+  border-left: 1px solid var(--border);
+}
+
+/* Print-only elements (built by print_links.js) stay invisible on screen —
+   screen rendering is unchanged by the links appendix. */
+.print-link-marker,
+.print-links {
+  display: none;
 }
 
 /* ---------- Conversation detail ---------- */
@@ -1515,10 +1587,12 @@ section h2 {
   margin-bottom: 1.25rem;
 }
 
-/* ---------- Print stylesheet (plan §11 — grow with templates) ---------- */
+/* ---------- Print stylesheet (polished in v1.2 Session N) ---------- */
 
 @media print {
-  /* Drop chrome that has no meaning on paper. */
+  /* Drop chrome that has no meaning on paper. The footer stays hidden
+     deliberately — it carries the account name and source path, which a
+     shared printout shouldn't leak. */
   .site-header,
   .site-footer,
   .site-nav,
@@ -1529,14 +1603,15 @@ section h2 {
   .bulk-bar,
   .conv-checkbox,
   .breadcrumb,
-  .branch-switcher,
+  .conv-actions,
   .search-form,
   .orphan-banner,
   .load-error-banner,
   .inspect-banner,
   .orphan-purge,
   .upload-form,
-  .help-controls {
+  .help-controls,
+  .memory-block-controls {
     display: none !important;
   }
 
@@ -1566,32 +1641,84 @@ section h2 {
     padding: 0;
   }
 
-  /* Force-open any <details> elements so collapsed sections print. */
-  details > summary {
+  /* <details> printing is deliberate WYSIWYG (Session N, replacing the
+     dead force-open hack): closed blocks print as their visible summary
+     line, open blocks print summary plus body — the screen state is the
+     print-time toggle, exactly parallel to the export feature's thinking
+     checkbox. Do NOT resurrect blanket force-open, including via
+     `details::details-content { content-visibility: visible; }` — the
+     do-not-resurrect note in docs/print-css-assessment.md is binding. */
+
+  /* Message timestamps don't print (the operator-chosen None default; the
+     None/Absolute/Relative print toggle is queued for the 1.2.6+ series).
+     The [aria-hidden] span is the " · " separator before the time. */
+  .msg-header time,
+  .msg-header [aria-hidden="true"] {
     display: none;
   }
-  details > *:not(summary) {
-    display: block !important;
+
+  /* Branch-point honesty: the switcher prints its label line only —
+     "Branch point — N sibling response(s)" — parity with the export
+     format's branch annotation. The option list is screen chrome. */
+  .branch-switcher {
+    border: none;
+    background: none;
+    padding: 0;
+  }
+  .branch-label {
+    text-transform: none;
+    letter-spacing: normal;
+    margin-bottom: 0;
+    color: black;
+  }
+  .branch-options,
+  .branch-label-colon {
+    display: none !important;
   }
 
-  /* Page-break hygiene. */
-  section {
-    break-inside: avoid-page;
-    page-break-inside: avoid;
-  }
+  /* Page-break hygiene. Elements taller than a page split anyway (engines
+     ignore unsatisfiable constraints). */
   h1, h2, h3 {
     break-after: avoid-page;
     page-break-after: avoid;
   }
 
-  /* Avoid orphan code blocks splitting awkwardly across pages. */
-  pre {
+  /* Code wraps in print instead of clipping — print has no scrollbars.
+     The .markdown-body form out-specifies the screen overflow-x rule. */
+  pre,
+  .markdown-body pre {
     break-inside: avoid-page;
     page-break-inside: avoid;
+    white-space: pre-wrap;
+    overflow-x: visible;
   }
 
   a {
     color: inherit;
     text-decoration: none;
+  }
+
+  /* Links appendix (built by print_links.js): the inline [N] markers and
+     the "Links" section at the end of the conversation become visible in
+     print only. */
+  .print-link-marker {
+    display: inline;
+    font-size: 0.75em;
+  }
+
+  .print-links {
+    display: block;
+    margin-top: 1.5rem;
+    border-top: 1px solid #ccc;
+    padding-top: 0.75rem;
+  }
+
+  .print-links ol {
+    margin: 0.5rem 0 0;
+    padding-left: 1.5rem;
+  }
+
+  .print-link-url {
+    word-break: break-all;
   }
 }

@@ -15,6 +15,7 @@ import pytest
 from viewer.parser import (
     ExportFormatError,
     TextBlock,
+    UnknownBlock,
     load_export,
 )
 
@@ -63,16 +64,28 @@ def test_empty_conversations_succeeds(fixtures_dir: Path) -> None:
     assert export.conversations == []
 
 
-def test_unknown_block_logged_and_dropped(fixtures_dir: Path, caplog) -> None:
+def test_unknown_block_logged_and_preserved(fixtures_dir: Path, caplog) -> None:
+    """Preserve-and-flag (v1.2 Session N): an unknown raw block type reaches
+    the model as an UnknownBlock carrying the whole raw record, instead of
+    being dropped after the warning."""
     with caplog.at_level(logging.WARNING, logger="viewer.parser"):
         export = load_export(fixtures_dir / "bad_unknown_block.zip")
-    assert any("speculation" in rec.getMessage() for rec in caplog.records)
+    assert any(
+        "speculation" in rec.getMessage() and "preserved" in rec.getMessage()
+        for rec in caplog.records
+    )
 
     conv = next(c for c in export.conversations if "minimal" in c.title.lower())
     assistant = conv.messages[1]
-    # The injected speculation block was at index 0; original text blocks remain.
-    assert assistant.content
-    assert all(isinstance(b, TextBlock) for b in assistant.content)
+    # The injected speculation block was at index 0; original text blocks follow.
+    unknown = assistant.content[0]
+    assert isinstance(unknown, UnknownBlock)
+    assert unknown.type == "speculation"
+    assert unknown.raw["text"] == "Should be skipped with a warning."
+    assert all(isinstance(b, TextBlock) for b in assistant.content[1:])
+    # The repr must not leak the raw record's content (house rule — same
+    # reason Message overrides its repr).
+    assert "Should be skipped" not in repr(unknown)
 
 
 def test_orphan_parent_logged_and_treated_as_root(

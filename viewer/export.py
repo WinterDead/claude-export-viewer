@@ -112,6 +112,7 @@ def serialise_conversation(
     *,
     project_label: str | None = None,
     exported_on: date | None = None,
+    include_frontmatter: bool = True,
 ) -> str:
     """Render one conversation path as a Markdown document.
 
@@ -119,6 +120,8 @@ def serialise_conversation(
     combination for a single-conversation export (WYSIWYG), the canonical
     path for bulk. ``project_label`` is the resolved viewer-tag label, or
     ``None`` when the ``project`` frontmatter field should be absent.
+    ``include_frontmatter=False`` (Session N — the clipboard delivery of the
+    copy control) drops the YAML header; the H1 title stays either way.
     """
     if options is None:
         options = ExportOptions()
@@ -138,25 +141,29 @@ def serialise_conversation(
     )
     has_attachments = any(msg.attachments for msg in conv.messages)
 
-    fm = ["---"]
-    fm.append(f"title: {_yaml_quote(title)}")
-    fm.append(f"uuid: {conv.uuid}")
-    fm.append(f"created: {conv.created_at.isoformat()}")
-    fm.append(f"updated: {conv.updated_at.isoformat()}")
-    fm.append(f"messages: {len(path_messages)}")
-    if project_label is not None:
-        fm.append(f"project: {_yaml_quote(project_label)}")
-    if conv.branch_points:
-        fm.append(f"branch_points: {len(conv.branch_points)}")
-    if has_thinking:
-        fm.append(f"thinking: {'included' if options.include_thinking else 'omitted'}")
-    if has_attachments:
-        fm.append(f"attachments: {'included' if options.include_attachment_text else 'referenced'}")
-    fm.append(f"exported: {exported_on.isoformat()}")
-    fm.append(f"generator: {GENERATOR_NAME} {APP_VERSION}")
-    fm.append("---")
-
-    segments: list[str] = ["\n".join(fm), f"# {_single_line(title)}"]
+    segments: list[str] = []
+    if include_frontmatter:
+        fm = ["---"]
+        fm.append(f"title: {_yaml_quote(title)}")
+        fm.append(f"uuid: {conv.uuid}")
+        fm.append(f"created: {conv.created_at.isoformat()}")
+        fm.append(f"updated: {conv.updated_at.isoformat()}")
+        fm.append(f"messages: {len(path_messages)}")
+        if project_label is not None:
+            fm.append(f"project: {_yaml_quote(project_label)}")
+        if conv.branch_points:
+            fm.append(f"branch_points: {len(conv.branch_points)}")
+        if has_thinking:
+            fm.append(f"thinking: {'included' if options.include_thinking else 'omitted'}")
+        if has_attachments:
+            fm.append(
+                f"attachments: {'included' if options.include_attachment_text else 'referenced'}"
+            )
+        fm.append(f"exported: {exported_on.isoformat()}")
+        fm.append(f"generator: {GENERATOR_NAME} {APP_VERSION}")
+        fm.append("---")
+        segments.append("\n".join(fm))
+    segments.append(f"# {_single_line(title)}")
 
     branch_point_set = set(conv.branch_points)
     for msg in path_messages:
@@ -271,8 +278,12 @@ def _files_segment(files: list[FileRef]) -> str:
 
 
 def _branch_annotation(alternates: int) -> str:
+    """Byte-exact per the Session N brief (both surfaces pluralised —
+    the print label line in the detail template is the other one)."""
+    if alternates == 1:
+        return "> **[Branch point]** 1 alternate response exists and is not included in this file."
     return (
-        f"> **[Branch point]** {alternates} alternate response(s) exist "
+        f"> **[Branch point]** {alternates} alternate responses exist "
         "and are not included in this file."
     )
 
@@ -280,12 +291,10 @@ def _branch_annotation(alternates: int) -> str:
 def _unknown_segment(block: object) -> str:
     """Preserve-and-flag for a block the serializer doesn't recognise.
 
-    The parser currently drops unknown raw block types before they reach the
-    model, so this path is dormant — it exists for the same reason as the
-    reading view's ``block-unknown`` card: a future parser change that
-    preserves unknown blocks must degrade to a named placeholder here, not
-    to a crash or a silent drop. The raw ``type`` value is used when the
-    object carries one; the class name otherwise.
+    Live path since Session N: the parser preserves unknown raw block types
+    as :class:`viewer.parser.UnknownBlock`, whose ``type`` attribute names
+    the raw type here. Any other unrecognised object degrades to its class
+    name rather than a crash or a silent drop.
     """
     type_name = getattr(block, "type", None) or type(block).__name__
     return f"> **[Unrecognised content block: {type_name}]**"
