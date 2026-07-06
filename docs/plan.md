@@ -372,7 +372,11 @@ Tagged `v1.2.0`. All four sessions (K–N) shipped; per-session locked decisions
     help.md gained the authored "Exporting conversations" section directly after
     "Reading a conversation". Both verified claim-by-claim (report matrix).
 
-## v1.2.5 — in progress
+## v1.2.5 — shipped (closed)
+
+Tagged `v1.2.5`. Both sessions (O, P) shipped; per-session locked decisions below. The
+version closes the core product's definition of done; the public flip is **pending
+operator action** — the flip itself is never performed by a session.
 
 - **Session O** *(shipped)* — public-flip delta audit + operator pass fixes (brief:
   `docs/briefs/v1.2.5-session-o-brief.md`; report: `docs/briefs/v1.2.5-session-o-report.md`).
@@ -407,6 +411,36 @@ Tagged `v1.2.0`. All four sessions (K–N) shipped; per-session locked decisions
     **within the existing `<7` cap** (soft gate; caps unchanged). Screenshots: all four
     stale, `conversation-branches.png` and `help.png` now misleading — retakes belong to
     the close session (public voice).
+- **Session P** *(shipped)* — close-out, two-phase (brief:
+  `docs/briefs/v1.2.5-session-p-brief.md`; report:
+  `docs/briefs/v1.2.5-session-p-report.md`). Phase 1 implemented and staged with nothing
+  committed; Phase 2 committed, bumped to 1.2.5, tagged `v1.2.5`, and pushed on operator
+  go-ahead. Locked decisions:
+  - Launcher verification is **complete on both platforms** (POSIX 2026-07-06, Windows
+    2026-07-06, operator reports in backups) — closes the roadmap's run.sh
+    re-verification item.
+  - The push-gap process finding produced P1: the remote was found nineteen commits and
+    two tags stale during the 2026-07-06 launcher verification — the session-end
+    checklist said commit, never push. CLAUDE.md step 6 now requires pushing the branch
+    and all tags to origin.
+  - Attachment-toggle clarity: byte-exact `title` tooltip on the **Include attachment
+    text** control on both surfaces it renders (detail-page fieldset and
+    conversations-list bulk bar), plus the byte-exact help.md sentence appended to
+    "Single conversations". The claim was verified before staging: the serializer's
+    toggle gates text attachments only (`_files_segment` is unconditional and
+    names-only), the parser's `FileRef` carries uuid + name — the archive holds no
+    binary content — and the reading view's files notice states the same.
+  - Screenshot retakes: all four README shots re-taken from the synthetic fixture via an
+    isolated instance per the Session G locked decisions (fixture `export_source`, temp
+    `db_path`, `source_paths` pinned to the bare filename, tags seeded through the real
+    `set_tag` API, footer excluded from every shot — hidden at capture time, same
+    visible outcome as cropping). `help.png` is deliberately full-page height now: the
+    current section list is the point, after Session O's A7 found the old crop
+    misleading for hiding sections. README references and alt texts verified unchanged
+    and accurate.
+  - The demo-fixture roadmap decision closes with the retakes: the synthetic-fixture
+    shots were operator-reviewed at the phase boundary and shipped; no purpose-built
+    demo fixture.
 
 ## Roadmap (post-v1.1)
 
@@ -451,11 +485,13 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   content to disk. *(done — Session O, verdicts above; adds screenshot retakes to the close
   session's list.)*
 - run.sh re-verification on a live USB session (the launcher-hardening changes return it to
-  unverified-on-POSIX; the operator procedure exists).
+  unverified-on-POSIX; the operator procedure exists). *(done — operator verification
+  complete on both platforms, 2026-07-06; recorded in Session P.)*
 - Demo-fixture decision: optional purpose-built fixture if the synthetic screenshots read
-  too plainly.
+  too plainly. *(resolved — Session P: retakes from the synthetic fixture shipped after
+  operator review at the phase boundary; no purpose-built fixture.)*
 - GitHub Releases created from the version tags with short changelogs; the repo flips
-  public.
+  public. *(pending operator action — the flip is never performed by a session.)*
 
 ### Later (unscheduled, non-blocking)
 
@@ -468,6 +504,19 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   conversation summary appears — metadata-only shipped as Session O's fixed resolution:
   frontmatter when present, so Copy omits it and Print keeps showing it), plus whatever
   lived use surfaces.
+- Embedded-HTML display policy — the viewer and print strip disallowed HTML tags from
+  displayed text (a literal `<details>` typed in a message vanishes from display), losing
+  characters the author wrote; evaluate escape-to-visible-text as the display default, and
+  separately whether closed, well-formed details blocks deserve real collapsible
+  rendering — a sanitiser-allowlist decision requiring its own written brief.
+- Launcher message polish (POSIX) — on the missing-venv-module path, Python's raw
+  ensurepip error prints before the friendly message; consider suppressing or summarising
+  the underlying stderr so the friendly message stands alone.
+- Launcher detection polish (Windows) — when the `py` launcher's default is pinned to an
+  older Python, installing a newer one doesn't change what `py -3` reports, so the too-old
+  message's advice can appear not to work; consider probing the launcher's full list
+  (`py -0p`) or versioned qualifiers before declaring "too old", or mentioning the pin
+  possibility in the message.
 
 Order between the two larger items below is undecided until development resumes; the
 current lean is portable tag state first.

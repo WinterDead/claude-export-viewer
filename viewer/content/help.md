@@ -69,7 +69,7 @@ Any conversation can be downloaded as a Markdown file — the message text exact
 
 ### Single conversations
 
-On a conversation's page, use **Export**. The file captures the branch combination you're currently viewing — switch branches first if you want a different path. Two checkboxes control the contents: **Include thinking blocks** (off by default — Claude's reasoning is often the most sensitive part of a conversation) and **Include attachment text** (on by default; untick it to keep attachments as one-line references).
+On a conversation's page, use **Export**. The file captures the branch combination you're currently viewing — switch branches first if you want a different path. Two checkboxes control the contents: **Include thinking blocks** (off by default — Claude's reasoning is often the most sensitive part of a conversation) and **Include attachment text** (on by default; untick it to keep attachments as one-line references). Attachment text means text-based attachments; binary files (images, PDFs, and so on) are never included in any export — Anthropic's archive stores only references to them.
 
 ### Exporting a selection
 

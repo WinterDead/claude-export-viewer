@@ -51,7 +51,8 @@ At the end of every session:
    `git diff --cached | Select-String -Pattern "(conversations\.json|projects\.json|users\.json|memor(y|ies)|uuid)"`
    and eyeball every hit — the point is to catch real conversation text, titles, or identifiers
    that slipped into docs, fixtures, or comments. Filenames alone (step 4) don't catch this.
-6. Commit with a descriptive message. Do not leave sessions uncommitted.
+6. Commit with a descriptive message, then push the branch and all tags to origin. Do not
+   leave sessions uncommitted or unpushed.
 7. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
    obsolete detail.
 8. Write the session report, including its verification matrix, to `docs/briefs/`
