@@ -65,7 +65,7 @@ When a message was regenerated or edited in the original conversation, the conve
 
 ## Exporting conversations
 
-Any conversation can be downloaded as a Markdown file — the message text exactly as stored, with a small metadata header (title, dates, message count, your project tag if you've set one) and clearly labelled markers for everything else: tool activity, attachments, branch points, and anything not included.
+Any conversation can be downloaded as a Markdown file — the message text exactly as stored, with a small metadata header (title, dates, summary, message count, your project tag if you've set one) and clearly labelled markers for everything else: tool activity, attachments, branch points, and anything not included.
 
 ### Single conversations
 

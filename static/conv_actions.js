@@ -17,7 +17,9 @@
 
   const copyBtn = form.querySelector(".copy-btn");
   const confirmEl = form.querySelector(".copy-confirm");
-  const printBtn = form.querySelector(".print-btn");
+  // The print button lives OUTSIDE the export form (v1.2.5 Session O): the
+  // toggles don't apply to printing, so it sits after the fieldset group.
+  const printBtn = document.querySelector(".conv-actions .print-btn");
 
   if (copyBtn) {
     copyBtn.addEventListener("click", async () => {

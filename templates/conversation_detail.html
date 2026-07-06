@@ -48,13 +48,16 @@
     </div>
     {% endif %}
 
-    {# Export / copy / print controls (v1.2 Session N). The GET form re-emits
-       the page's branch parameters, so the export is WYSIWYG — the same
-       combination this page is showing. Each checkbox is followed by a
-       hidden fallback carrying 0: unticked submits an explicit off instead
-       of nothing (absent means "use the default" at the endpoint, which is
-       wrong once the user unticks a default-on box). The checkbox must come
-       FIRST — the endpoint reads the first submitted value. #}
+    {# Export / copy / print controls (v1.2 Session N; grouped in v1.2.5
+       Session O). The GET form re-emits the page's branch parameters, so the
+       export is WYSIWYG — the same combination this page is showing. Each
+       checkbox is followed by a hidden fallback carrying 0: unticked submits
+       an explicit off instead of nothing (absent means "use the default" at
+       the endpoint, which is wrong once the user unticks a default-on box).
+       The checkbox must come FIRST — the endpoint reads the first submitted
+       value. The fieldset groups the two toggles with the two actions they
+       govern (Export and Copy); Print / Save as PDF sits outside the group
+       because printing is screen-WYSIWYG and the toggles don't apply to it. #}
     <div class="conv-actions">
       <form method="get"
             action="{{ url_for('viewer.conversation_export', uuid=conv.uuid) }}"
@@ -62,24 +65,27 @@
         {% for b in request.args.getlist('branch') %}
           <input type="hidden" name="branch" value="{{ b }}">
         {% endfor %}
-        <label class="export-option">
-          <input type="checkbox" name="thinking" value="1">
-          <input type="hidden" name="thinking" value="0">
-          Include thinking blocks
-        </label>
-        <label class="export-option">
-          <input type="checkbox" name="attachments" value="1" checked>
-          <input type="hidden" name="attachments" value="0">
-          Include attachment text
-        </label>
-        <button type="submit" class="export-btn">Export</button>
-        <button type="button" class="copy-btn"
-                data-export-url="{{ url_for('viewer.conversation_export', uuid=conv.uuid) }}">
-          Copy conversation
-        </button>
-        <span class="copy-confirm" role="status" hidden>Copied</span>
-        <button type="button" class="print-btn">Print / Save as PDF</button>
+        <fieldset class="export-options">
+          <legend>Export options</legend>
+          <label class="export-option">
+            <input type="checkbox" name="thinking" value="1">
+            <input type="hidden" name="thinking" value="0">
+            Include thinking blocks
+          </label>
+          <label class="export-option">
+            <input type="checkbox" name="attachments" value="1" checked>
+            <input type="hidden" name="attachments" value="0">
+            Include attachment text
+          </label>
+          <button type="submit" class="export-btn">Export</button>
+          <button type="button" class="copy-btn"
+                  data-export-url="{{ url_for('viewer.conversation_export', uuid=conv.uuid) }}">
+            Copy conversation
+          </button>
+          <span class="copy-confirm" role="status" hidden>Copied</span>
+        </fieldset>
       </form>
+      <button type="button" class="print-btn">Print / Save as PDF</button>
     </div>
   </header>
 

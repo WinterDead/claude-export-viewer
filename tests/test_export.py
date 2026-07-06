@@ -954,3 +954,51 @@ def test_document_ends_with_single_trailing_newline(client) -> None:
     doc = _get_doc(client, CONV_MINIMAL)
     assert doc.endswith(".\n") or doc.endswith("\n")
     assert not doc.endswith("\n\n")
+
+
+# ---------------------------------------------------------------------------
+# Summary frontmatter (v1.2.5 Session O, B4 — operator-ratified: no toggle)
+# ---------------------------------------------------------------------------
+
+
+def test_summary_present_only_when_conversation_has_one(client) -> None:
+    """The field rides directly after ``title`` when the conversation has a
+    summary; a summary-less conversation carries no field at all."""
+    fields = _frontmatter(_get_doc(client, CONV_MINIMAL))
+    assert fields["summary"] == '"One human turn, one assistant turn."'
+    assert list(fields)[:3] == ["title", "summary", "uuid"]
+    # CONV_FULL is hand-built with summary="" — the field order pin in
+    # test_frontmatter_full_fields_on_fully_featured_conversation already
+    # proves absence there; restate the absence directly for clarity.
+    assert "summary" not in _frontmatter(_get_doc(client, CONV_FULL))
+
+
+def test_summary_omitted_from_copy_output(client) -> None:
+    """Copy fetches with ``frontmatter=0`` — the summary is metadata only,
+    so the copied text carries no trace of it (the operator's copy
+    intuition: what you copy is what the thread says)."""
+    doc = _get_doc(client, CONV_MINIMAL, "?frontmatter=0")
+    assert "summary" not in doc
+    assert "One human turn" not in doc
+
+
+def test_multiline_summary_roundtrips_as_valid_yaml() -> None:
+    """The double-quoted scalar ``_yaml_quote`` emits uses only the ``\\\\``,
+    ``\\"``, and ``\\n`` escapes — the JSON-compatible subset of YAML's
+    double-quoted style — so ``json.loads`` is a faithful valid-YAML
+    round-trip check without adding a YAML dependency."""
+    summary = 'Line one.\nLine "two" mentions a \\ backslash.\nLine three.'
+    conv = dataclasses.replace(
+        _linear_conv(
+            "ex-sum",
+            "Summary round-trip",
+            [_mk_msg("ex-sum-1", "human", None, [TextBlock("x")])],
+        ),
+        summary=summary,
+    )
+    doc = serialise_conversation(conv, conv.canonical_path)
+    line = next(ln for ln in doc.splitlines() if ln.startswith("summary: "))
+    scalar = line[len("summary: ") :]
+    assert json.loads(scalar) == summary
+    # One line in the header: the newlines travel as escapes, never raw.
+    assert "\n" not in scalar

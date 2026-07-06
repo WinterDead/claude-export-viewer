@@ -298,6 +298,37 @@ def test_print_links_js_present_and_loaded(client) -> None:
     assert "print_links.js" in _detail_page(client)
 
 
+def test_print_links_js_class_names_match_print_css_reveals() -> None:
+    """B5 pin (v1.2.5 Session O): the class names print_links.js actually
+    assigns are exactly the ones the stylesheet knows, and the two
+    visibility-bearing ones are hidden on screen then explicitly revealed
+    inside ``@media print`` — LATER in the sheet, so the reveal wins the
+    equal-specificity cascade. This is the JS↔CSS seam the operator pass
+    questioned; the Session O print-to-PDF reproduction confirmed the seam
+    works, and this guard keeps either side from drifting."""
+    js = (STATIC_DIR / "print_links.js").read_text(encoding="utf-8")
+    js_classes = set(re.findall(r'className = "([a-z-]+)"', js))
+    assert js_classes == {"print-link-marker", "print-links", "print-link-text", "print-link-url"}
+
+    css = (STATIC_DIR / "style.css").read_text(encoding="utf-8")
+    screen_css, print_block = css.split("@media print {", 1)
+    # Screen side: both visibility-bearing classes hidden (screen unchanged).
+    assert re.search(r"\.print-link-marker,\s*\.print-links\s*\{\s*display: none;\s*\}", screen_css)
+    # Print side: each revealed with an explicit display value. The bare
+    # `.print-links {` selector (not `.print-links ol`) must carry the reveal.
+    assert re.search(r"\.print-link-marker\s*\{[^}]*display: inline;", print_block)
+    assert re.search(r"\.print-links\s*\{[^}]*display: block;", print_block)
+    # The styled classes the JS assigns exist in the sheet — a renamed class
+    # on either side fails here before it can silently kill the feature.
+    # (print-link-text is a deliberately unstyled semantic hook.)
+    for name in ("print-link-marker", "print-links", "print-link-url"):
+        assert f".{name}" in css, name
+    # And the print hide-list can never swallow the appendix or its host.
+    hide_list = print_block[: print_block.index("display: none !important;")]
+    assert ".print-links" not in hide_list
+    assert ".conv-detail" not in hide_list
+
+
 # ---------------------------------------------------------------------------
 # C2 — branch-label pluralisation (the print/screen surface)
 # ---------------------------------------------------------------------------

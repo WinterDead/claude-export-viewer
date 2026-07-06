@@ -274,3 +274,13 @@ def test_history_link_in_nav(app_factory) -> None:
     client = app_factory().test_client()
     body = client.get("/").get_data(as_text=True)
     assert '<a href="/history">History</a>' in body
+
+
+def test_nav_order_history_directly_after_upload(app_factory) -> None:
+    """Operator decision (v1.2.5 Session O, B1): History records uploads, so
+    it sits directly right of Upload — Home … Upload, History, Inspect, Help."""
+    client = app_factory().test_client()
+    body = client.get("/").get_data(as_text=True)
+    tail = [">Upload<", ">History<", ">Inspect<", ">Help<"]
+    positions = [body.index(marker) for marker in tail]
+    assert positions == sorted(positions)

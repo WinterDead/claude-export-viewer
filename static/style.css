@@ -601,13 +601,31 @@ section h2 {
 
 .conv-actions {
   margin-top: 0.75rem;
-}
-
-.export-form {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 1rem;
+}
+
+/* The fieldset groups the two toggles with the two actions they govern
+   (Export and Copy — v1.2.5 Session O); Print / Save as PDF sits outside
+   the group because the toggles don't apply to it. */
+.export-options {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin: 0;
+  padding: 0.35rem 0.85rem 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.export-options legend {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0 0.4rem;
 }
 
 .export-option {

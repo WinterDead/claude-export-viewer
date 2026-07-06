@@ -36,6 +36,7 @@ YAML frontmatter, then an H1 title. Fields:
 ```yaml
 ---
 title: "<conversation title, or the synthesised preview for untitled conversations>"
+summary: "<conversation summary>"     # only when the conversation has one
 uuid: <conversation uuid>
 created: <ISO 8601, from the export>
 updated: <ISO 8601, from the export>

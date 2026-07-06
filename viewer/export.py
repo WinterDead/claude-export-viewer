@@ -145,6 +145,13 @@ def serialise_conversation(
     if include_frontmatter:
         fm = ["---"]
         fm.append(f"title: {_yaml_quote(title)}")
+        # Summary rides as metadata only (v1.2.5 Session O, operator-ratified):
+        # present in the frontmatter when the conversation has one, so Export
+        # carries it, Copy (frontmatter off) omits it, and Print keeps showing
+        # it on the page. The double-quoted scalar is the YAML-safe form for
+        # multi-line text (_yaml_quote escapes the newlines).
+        if conv.summary:
+            fm.append(f"summary: {_yaml_quote(conv.summary)}")
         fm.append(f"uuid: {conv.uuid}")
         fm.append(f"created: {conv.created_at.isoformat()}")
         fm.append(f"updated: {conv.updated_at.isoformat()}")

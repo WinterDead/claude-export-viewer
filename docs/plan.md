@@ -372,6 +372,42 @@ Tagged `v1.2.0`. All four sessions (K–N) shipped; per-session locked decisions
     help.md gained the authored "Exporting conversations" section directly after
     "Reading a conversation". Both verified claim-by-claim (report matrix).
 
+## v1.2.5 — in progress
+
+- **Session O** *(shipped)* — public-flip delta audit + operator pass fixes (brief:
+  `docs/briefs/v1.2.5-session-o-brief.md`; report: `docs/briefs/v1.2.5-session-o-report.md`).
+  No version bump, no tag. Locked decisions and findings:
+  - Nav order (operator decision, B1): Home, Conversations, Projects, Memory, Search,
+    Upload, **History**, Inspect, Help — History directly right of Upload. Test-pinned
+    (`tests/test_history.py`).
+  - Export-control grouping (B2): the two toggles plus **Export** and **Copy
+    conversation** sit in a fieldset with byte-exact legend **Export options**;
+    **Print / Save as PDF** sits outside the group *and* the form (screen-WYSIWYG, the
+    toggles don't govern it). Test-pinned (`tests/test_export_form_e2e.py`).
+  - Summary rides the frontmatter (operator-ratified, no toggle — B4): directly after
+    `title`, only when the conversation has one, double-quoted YAML-safe scalar. Export
+    carries it as metadata; Copy (frontmatter off) omits it; Print keeps showing it.
+    Design record and help.md amended byte-exact; the summary-placement toggle is queued
+    under 1.2.6+.
+  - **B3/B5 verdicts — no code defects.** The export toggles work through the real
+    rendered forms on all three surfaces (verified in a driven Chromium; the operator's
+    observation traces to the attachments-vs-binary-files reach split — binary files are
+    never included, by design, and dominate the real archive 41:7). The links appendix
+    works end-to-end in real print rendering (verified by print-to-PDF; the operator's
+    observation traces to bare URLs — 91 of 213 real conversations carry bare URLs with
+    no markdown-form link, and bare URLs never become anchors). Both pinned: four-state
+    end-to-end form tests (closing the hand-built-parameters test gap) and the JS↔CSS
+    print-links content guard. Follow-up copy/linkify questions are operator decisions
+    recorded in the Session O report, folding into the 1.2.6+ queue.
+  - Audit verdicts: export write paths, log content, security pins, and the whole-tree
+    public-trajectory sweep all clean; the Werkzeug multipart spool (Session K's recorded
+    input) documented with deletion verified in the installed stack — the help page's
+    "nothing saved to disk" stays fair. Dependency audit: the four ranges freshly resolve
+    clean; the dev venv's bleach 6.3.0 carried three advisories and was bumped to 6.4.0
+    **within the existing `<7` cap** (soft gate; caps unchanged). Screenshots: all four
+    stale, `conversation-branches.png` and `help.png` now misleading — retakes belong to
+    the close session (public voice).
+
 ## Roadmap (post-v1.1)
 
 Sequenced 2026-07; supersedes the earlier "v1.2 — gate items" list. Definition of done for
@@ -412,7 +448,8 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 ### v1.2.5 — public release
 
 - Delta audit of what v1.2 introduced: inspector path handling; export writing conversation
-  content to disk.
+  content to disk. *(done — Session O, verdicts above; adds screenshot retakes to the close
+  session's list.)*
 - run.sh re-verification on a live USB session (the launcher-hardening changes return it to
   unverified-on-POSIX; the operator procedure exists).
 - Demo-fixture decision: optional purpose-built fixture if the synthetic screenshots read
@@ -425,9 +462,12 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 - **1.2.6+ patch series (reserved — recorded prominently so it isn't forgotten between
   work windows).** UI and flow tweaks from lived use; expected one or two releases, up to
   four reserved before 1.3+. Currently queued: the **print timestamp toggle**
-  (None / Absolute / Relative — None shipped as Session N's fixed default) and the
+  (None / Absolute / Relative — None shipped as Session N's fixed default), the
   **link-appendix mode toggle** (appendix / inline URLs / none — appendix shipped as the
-  fixed default), plus whatever lived use surfaces.
+  fixed default), and the **summary-placement toggle** (body-level control over where the
+  conversation summary appears — metadata-only shipped as Session O's fixed resolution:
+  frontmatter when present, so Copy omits it and Print keeps showing it), plus whatever
+  lived use surfaces.
 
 Order between the two larger items below is undecided until development resumes; the
 current lean is portable tag state first.
