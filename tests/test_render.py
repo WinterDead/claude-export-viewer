@@ -597,7 +597,7 @@ def test_split_memory_all_four_standard_bold_sections() -> None:
     assert titles == ["Work context", "Personal context", "Top of mind", "Brief history"]
     contents = [c for _, c in sections]
     assert contents[0] == "Alex works on X."
-    assert "dyslexia" in contents[1]
+    assert "hiking" in contents[1]
 
 
 def test_split_memory_only_some_sections() -> None:

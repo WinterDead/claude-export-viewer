@@ -5,6 +5,11 @@
 > replaces it as the canonical plan document from v1.1 onward. The §-references in code comments
 > are historical; treat the commit history and CLAUDE.md as the record of v1.0 decisions.
 
+> **History rewrite, 2026-07.** All history was rewritten once before the public
+> release (author-email correction and a fixture-string scrub); commit hashes cited in
+> documents and briefs written before the rewrite are pre-rewrite identifiers, kept as
+> historical labels.
+
 ## v1.0 — shipped (locked decisions)
 
 Tagged `v1.0.0` (commit `a0de01a`). Feature-complete viewer: parser with preserve-and-flag

@@ -53,6 +53,8 @@ At the end of every session:
    that slipped into docs, fixtures, or comments. Filenames alone (step 4) don't catch this.
 6. Commit with a descriptive message, then push the branch and all tags to origin. Do not
    leave sessions uncommitted or unpushed.
+   Before pushing, verify author identities: `git log --format='%ae' | Sort-Object
+   -Unique` must show only the noreply address.
 7. Update the plan document (`docs/plan.md`): mark shipped items as locked decisions, prune
    obsolete detail.
 8. Write the session report, including its verification matrix, to `docs/briefs/`
