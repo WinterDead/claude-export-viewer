@@ -27,6 +27,11 @@
         <li><a href="{{ url_for('viewer.conversation_list') }}">Conversations</a></li>
         <li><a href="{{ url_for('viewer.project_list') }}">Projects</a></li>
         <li><a href="{{ url_for('viewer.memory_view') }}">Memory</a></li>
+        {% if g_has_account %}
+          {# Present whenever users.json is in the viewed set — both formats
+             (v1.3.0, record §8); hidden otherwise. #}
+          <li><a href="{{ url_for('viewer.account_view') }}">Account</a></li>
+        {% endif %}
         <li><a href="{{ url_for('viewer.search_view') }}">Search</a></li>
         <li><a href="{{ url_for('viewer.upload_form') }}">Upload</a></li>
         <li><a href="{{ url_for('viewer.history_view') }}">History</a></li>

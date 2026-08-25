@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from app import create_app
 from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS
 from viewer.parser import load_export
 from viewer.search import (
@@ -59,8 +60,10 @@ def test_index_export_populates_expected_row_count(conn, export) -> None:
     """One row per searchable surface — see ``_expected_row_count`` formula."""
     n = index_export(conn, export)
     # 4 conversations + 10 messages + 2 projects + 3 docs + 1 global memory
-    # + 1 project memory (proj-A only) + 0 orphans = 21.
-    assert n == 21
+    # + 1 project memory (proj-A only) + 0 orphans = 21, plus one row per
+    # memory file (v1.3.0, record §7 — 4 in the current-format fixture,
+    # none in the legacy one).
+    assert n == 21 + len(export.memory_files)
 
 
 def test_index_export_is_idempotent(conn, export) -> None:
@@ -382,3 +385,31 @@ def test_search_route_branch_aware_links(client) -> None:
 def test_search_route_malformed_query_renders_friendly_error(client) -> None:
     body = client.get("/search?q=%22unclosed").get_data(as_text=True)
     assert "syntax error" in body.lower()
+
+
+# ---------------------------------------------------------------------------
+# Memory-file hits (v1.3.0, record §7)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def current_client(tmp_path: Path, fixtures_dir: Path):
+    app = create_app(fixtures_dir / "current", db_path=tmp_path / "viewer-current.sqlite")
+    return app.test_client()
+
+
+def test_memory_file_hits_render_with_path_and_anchor_link(current_client) -> None:
+    body = current_client.get("/search?q=colleague").get_data(as_text=True)
+    assert "/people/synthetic-colleague.md" in body
+    assert "/memory#memory-file-people-synthetic-colleague-md" in body
+    assert "<mark>" in body
+
+
+def test_memory_file_index_rows_are_searchable_by_path(conn, export) -> None:
+    if not export.memory_files:
+        pytest.skip("legacy run — no memory files to index")
+    index_export(conn, export)
+    results = search(conn, "preferences")
+    assert any(h.kind == "memory_file" for h in results.hits)
+    hit = next(h for h in results.hits if h.kind == "memory_file")
+    assert hit.title == "/preferences.md"

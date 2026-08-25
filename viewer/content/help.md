@@ -1,20 +1,26 @@
 # Help
 
-This app is a local viewer for your Claude data export — the ZIP archive Anthropic provides when you request your data. It parses the archive on your machine and gives you a browsable, searchable interface over your conversations, projects, and memory. Everything runs locally: your export is never uploaded anywhere, and nothing leaves your computer.
+This app is a local viewer for your Claude data export — the files Anthropic provides when you request your data. It parses the export on your machine and gives you a browsable, searchable interface over your conversations, projects, memory, and account data. Everything runs locally: your export is never uploaded anywhere, and nothing leaves your computer.
 
 The sections below cover everything from requesting an export to advanced tagging workflows. Click any heading to expand it.
 
 ## Getting your export from Anthropic
 
-In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open **Settings**, go to the **Privacy** section, and click **Export data**. Anthropic processes the request and emails you a download link; the link expires after 24 hours, so download promptly. The download is a ZIP archive — that ZIP, exactly as downloaded, is what this viewer reads. Don't unzip it.
+In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open **Settings**, go to the **Privacy** section, and click **Export data**. Anthropic processes the request and emails you a download link; the link expires after 24 hours, so download promptly. Current exports arrive as a small manifest file whose links download up to four ZIP files (conversations, projects, memories, and account metadata); download them all and upload them to the viewer together, exactly as downloaded — there's no need to unzip anything. Older single-ZIP exports load exactly as before.
 
 If you're on a Claude Team or Enterprise plan, individual members can't self-export; the organisation owner has to run an export from Organization settings.
 
-The export contains your conversations (including messages on alternate branches), your projects with their instructions and knowledge documents, and Claude's memory. It does **not** contain uploaded file bodies (only references to them), and it does not record which project each conversation belonged to — which is why this viewer has its own tagging system (see *Tagging and the triage workflow*).
+The export contains your conversations (including messages on alternate branches), your projects with their instructions and knowledge documents, Claude's memory, and — in current exports — your account details and login history (see *The Account page*). It does **not** contain uploaded file bodies (only references to them), and it does not record which project each conversation belonged to — which is why this viewer has its own tagging system (see *Tagging and the triage workflow*).
 
 ## Loading an export into the viewer
 
-Click **Upload** in the top nav, choose your export ZIP, and upload. The viewer parses and validates the archive before replacing anything — if the file is corrupted or has an unexpected structure, you get an error and whatever was previously loaded stays intact. Uploads are capped at 200 MB, which comfortably covers any realistic export.
+Choose your export files and upload them together — every ZIP from a current export plus, optionally, the manifest, or a single legacy ZIP. You can load a partial set; a banner will tell you what's missing and which features are affected.
+
+Your manifest file contains live, signed download links to your export. Treat it like the export itself: don't share it, post it, or commit it anywhere public.
+
+Uploads are capped at 200 MB per file — more than any export file seen so far. If yours ever exceeds it, set the VIEWER_MAX_UPLOAD_MB environment variable before launching to raise the cap.
+
+The viewer parses and validates the files before replacing anything — if a file is corrupted or has an unexpected structure, you get an error and whatever was previously loaded stays intact.
 
 On startup, the app loads the most recently uploaded export automatically. If you've never uploaded one, it shows a small built-in sample dataset so the interface is explorable — the footer always shows which source is loaded, so you can tell sample data from your own.
 
@@ -29,7 +35,7 @@ Sometimes you want to look inside an export without making it yours — a second
 A dashboard with two parts:
 
 - **Stats panel** — totals for conversations, messages, branched conversations, projects, and project memories. The quickest way to confirm the right export is loaded.
-- **Global memory** — Claude's accumulated memory about you, collapsed by default. Expand it to read the full text, with its internal sections as nested collapsible blocks.
+- **Conversation memory** — Claude's accumulated memory about you, collapsed by default. Expand it to read the full text, with its internal sections as nested collapsible blocks.
 
 ## Browsing conversations
 
@@ -93,11 +99,21 @@ The **Projects** page lists every project in the export. Each project's detail p
 
 ## Memory
 
-The **Memory** page collects every memory blob in the export: global memory first, then per-project memories. Everything is collapsed by default; expand a memory to see its internal sections as nested collapsible blocks, with per-memory expand/collapse-all controls. If a memory belongs to a project that no longer exists in the export, it's surfaced in its own section at the bottom rather than hidden.
+The **Memory** page collects every memory in the export, in up to three groups — whichever your archive contains:
+
+- **Conversation memory** — the running memory Claude builds across your conversations, with its internal sections as nested collapsible blocks and per-memory expand/collapse-all controls.
+- **Memory files** — the newer memory system's individual files (current exports only), grouped by their folder paths. Each file is collapsed under its full path with its last-updated date; files that begin with a small `---` metadata header show that header verbatim above the rendered body.
+- **Project memories** — per-project memory, sortable like the other lists. If a memory belongs to a project that isn't in the export, it's surfaced in its own section rather than hidden.
+
+Everything is collapsed by default — click a header to expand it.
+
+## The Account page
+
+Shown whenever the export includes your account file — the [Account](/account) page displays the identity data in your archive (name, email, and account ID) and, for current exports, your **login history**: a table of recorded logins, newest first, with the timestamp (in your local time), method, IP address, location, and browser and operating system. Older single-ZIP exports don't include login history; the page says so. It's your data — the viewer shows everything the archive contains.
 
 ## Search
 
-Search runs across everything indexed: conversation titles and summaries, every message (including alternate branches), project names and descriptions, knowledge documents, and all memory.
+Search runs across everything indexed: conversation titles and summaries, every message (including alternate branches), project names and descriptions, knowledge documents, and all memory — the conversation memory, memory files, and project memories.
 
 Just type naturally — punctuation, apostrophes, and hyphens are handled for you. For exact phrases, prefix matching, proximity, and boolean operators, open the **Search syntax guide** on the [search page](/search) itself.
 
@@ -146,14 +162,18 @@ The [History](/history) page records every export load — when, whether it came
 
 ## Backups and your data
 
-Everything this app knows lives in its local `cache/` folder, and two files there are worth protecting:
+Everything this app knows lives in its local `cache/` folder, and two things there are worth protecting:
 
 - **`viewer.sqlite`** — your tagging work and upload history. Losing it means redoing the triage sweep.
-- **`active_export.zip`** — the currently loaded export.
+- **the `active_export/` folder** — the currently loaded export files, exactly as you uploaded them. (Uploads from older versions of the viewer may instead be a single `active_export.zip`; protect whichever exists.)
 
-Back them up **together**: tags reference conversation IDs in the export, so restoring one without the other can produce orphans. To restore, stop the app, copy both files back into `cache/`, and restart.
+Back them up **together**: tags reference conversation IDs in the export, so restoring one without the other can produce orphans. To restore, stop the app, copy both back into `cache/`, and restart.
 
-A privacy note on destinations: the export ZIP contains your complete conversation history, so it's the most sensitive file on this list. A local or encrypted backup destination is the cautious choice for it; cloud-synced folders upload whatever you place in them. The tag database reveals far less (titles and groupings, not content), and the export itself can always be re-requested from Anthropic, so treating the ZIP as replaceable rather than backing it up is also a reasonable approach.
+A privacy note on destinations: the export files contain your complete conversation history, so they're the most sensitive items on this list. A local or encrypted backup destination is the cautious choice; cloud-synced folders upload whatever you place in them. The tag database reveals far less (titles and groupings, not content), and the export itself can always be re-requested from Anthropic, so treating the export files as replaceable rather than backing them up is also a reasonable approach.
+
+## What the viewer doesn't keep
+
+Thinking blocks in current-format exports carry a verification signature — an opaque cryptographic blob with no human-readable content. The viewer doesn't display, store, or cache signatures; dropping them keeps the local cache smaller. A few other technical fields (per-block timing, search-result link lists) are preserved but not yet displayed. If you have a use for any of these, open an issue on GitHub.
 
 ## Troubleshooting
 

@@ -52,7 +52,8 @@ def test_memory_view_renders_global_and_project_memory(client) -> None:
     r = client.get("/memory")
     assert r.status_code == 200
     body = r.get_data(as_text=True)
-    assert "Global memory" in body
+    # Record §7 / Appendix C7: the blob's group heading.
+    assert "Conversation memory" in body
     # proj-A has memory in the synthetic fixture.
     assert "Synthetic Project A" in body
     # proj-B has no memory; its name should NOT appear in the memory list.
@@ -212,3 +213,72 @@ def test_memory_js_loaded_on_every_page(client) -> None:
     for path in ("/", "/memory", "/conversations", "/search"):
         body = client.get(path).get_data(as_text=True)
         assert 'src="/static/memory.js"' in body, f"{path} missing memory.js"
+
+
+# ---------------------------------------------------------------------------
+# Memory files (v1.3.0, record §7 — current format only)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def current_client(tmp_path: Path, fixtures_dir: Path):
+    app = create_app(fixtures_dir / "current", db_path=tmp_path / "viewer-current.sqlite")
+    return app.test_client()
+
+
+def test_memory_files_group_renders_with_c7_copy(current_client) -> None:
+    body = current_client.get("/memory").get_data(as_text=True)
+    assert "Memory files" in body
+    assert "Project memories" in body
+    # Every file is a collapsible titled by its full path.
+    for path in (
+        "/profile.md",
+        "/people/synthetic-colleague.md",
+        "/topics/nested/deeper-topic.md",
+        "/preferences.md",
+    ):
+        assert path in body
+    # Appendix C7 per-file line.
+    assert re.search(r"Updated ", body)
+
+
+def test_memory_files_grouped_by_top_level_segment(current_client) -> None:
+    """Open-set grouping: whatever top-level directories exist become
+    groups; root-level files come first without a directory heading."""
+    body = current_client.get("/memory").get_data(as_text=True)
+    assert "<code>/people/</code>" in body
+    assert "<code>/topics/</code>" in body
+    # Root files precede the directory groups.
+    assert body.index("/profile.md") < body.index("<code>/people/</code>")
+
+
+def test_memory_file_frontmatter_fence_preformatted(current_client) -> None:
+    body = current_client.get("/memory").get_data(as_text=True)
+    m = re.search(r'<pre class="memory-file-frontmatter">(.*?)</pre>', body, re.S)
+    assert m, "frontmatter fence block missing"
+    assert "name: profile" in body
+    # The body below the fence renders as sanitised Markdown.
+    assert "<strong>markdown</strong>" in body
+
+
+def test_memory_file_without_frontmatter_renders_entirely_as_markdown(current_client) -> None:
+    body = current_client.get("/memory").get_data(as_text=True)
+    assert "Synthetic preference notes without a frontmatter fence." in body
+    # No fence block for that file: exactly three of the four have one.
+    fences = re.findall(r'<pre class="memory-file-frontmatter">', body)
+    assert len(fences) == 3
+
+
+def test_memory_files_collapsed_by_default_with_anchor_ids(current_client) -> None:
+    body = current_client.get("/memory").get_data(as_text=True)
+    m = re.search(r'<details class="memory-block memory-block-file"[^>]*>', body)
+    assert m and " open" not in m.group(0)
+    assert 'id="memory-file-profile-md"' in body
+
+
+def test_legacy_export_shows_no_memory_files_group(tmp_path: Path, fixtures_dir: Path) -> None:
+    app = create_app(
+        fixtures_dir / "synthetic_export.zip", db_path=tmp_path / "viewer-legacy.sqlite"
+    )
+    body = app.test_client().get("/memory").get_data(as_text=True)
+    assert "Memory files" not in body

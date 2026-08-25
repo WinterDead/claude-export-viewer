@@ -779,6 +779,7 @@ section h2 {
 .block-card {
   display: flex;
   align-items: baseline;
+  flex-wrap: wrap; /* display_content bodies drop to their own full row */
   gap: 0.6rem;
   padding: 0.4rem 0.7rem;
   border: 1px solid var(--border);
@@ -830,6 +831,112 @@ section h2 {
 .block-card-meta {
   color: var(--muted);
   margin-left: auto;
+}
+
+/* display_content bodies inside tool cards (v1.3.0, record §9.5): the
+   card's flex row wraps, so the body takes a full-width row beneath the
+   name line. Prose bodies return to the app font; code stays monospace. */
+.block-card .display-content {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+.display-content-text,
+.display-content-table,
+.display-content-link {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.display-content-table {
+  overflow-x: auto;
+}
+
+.display-content-table table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.display-content-table td {
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.6rem;
+  background: white;
+}
+
+.display-content-json > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.display-content-json pre {
+  margin: 0.35rem 0 0;
+  padding: 0.5rem 0.7rem;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.85rem;
+}
+
+/* Injected prompt (v1.3.0, record §9.1): a labelled collapsible card. */
+.injected-prompt {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.4rem 0.75rem;
+  background: var(--code-bg);
+}
+
+.injected-prompt > summary {
+  cursor: pointer;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.injected-prompt-body {
+  margin-top: 0.5rem;
+}
+
+/* Thinking summaries and the hidden-in-the-app badge (record §9.2/§9.3). */
+.thinking-summaries {
+  margin: 0.5rem 0 0;
+  padding-left: 1.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.thinking-hidden-badge {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid var(--border);
+  background: white;
+  color: var(--muted);
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: help;
+}
+
+/* Sources list beneath cited text blocks (record §9.4, heading C10). */
+.text-sources {
+  margin: 0.35rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.text-sources-heading {
+  font-weight: 600;
+}
+
+.text-sources-list {
+  margin: 0.15rem 0 0;
+  padding-left: 1.4rem;
+}
+
+.text-sources-list a {
+  word-break: break-all;
 }
 
 /* Attachments */
@@ -1076,7 +1183,8 @@ section h2 {
   padding-top: 1rem;
 }
 
-.memory-orphans h2 {
+.memory-orphans h2,
+.memory-orphans h3 {
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.25rem;
   margin: 0 0 1rem;
@@ -1090,6 +1198,89 @@ section h2 {
   color: var(--muted);
   font-weight: 400;
   font-size: 0.95rem;
+}
+
+/* Memory-page groups (v1.3.0, record §7): conversation memory, memory
+   files, project memories. */
+.memory-group {
+  margin-top: 2rem;
+}
+
+.memory-group > h2 {
+  font-size: 1.2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+  margin: 0 0 1rem;
+}
+
+.memory-file-group-title {
+  font-size: 0.95rem;
+  color: var(--muted);
+  margin: 1rem 0 0.5rem;
+  font-weight: 500;
+}
+
+.memory-file-path {
+  font-size: 0.9rem;
+}
+
+.memory-file-frontmatter {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--code-bg);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  color: var(--muted);
+}
+
+/* ---------- Account page (v1.3.0, record §8) ---------- */
+
+.account-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1.25rem;
+  margin: 0 0 2rem;
+}
+
+.account-fields dt {
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.account-fields dd {
+  margin: 0;
+}
+
+.login-history h2 {
+  font-size: 1.2rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.25rem;
+  margin: 0 0 1rem;
+}
+
+.login-table-wrap {
+  overflow-x: auto;
+}
+
+.login-table {
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  width: 100%;
+}
+
+.login-table th {
+  text-align: left;
+  border-bottom: 2px solid var(--border);
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  white-space: nowrap;
+}
+
+.login-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.35rem 0.75rem 0.35rem 0;
+  vertical-align: top;
 }
 
 /* ---------- Search view (plan §12 step 6) ---------- */

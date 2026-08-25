@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Account — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="account-page">
+  <header class="page-header">
+    {# Headings, table headers, and the empty-state line are Appendix C4
+       copy, byte-exact (v1.3.0, record §8). #}
+    <h1>Account</h1>
+    <p class="lede">
+      The identity data in your export, shown because it's your data — the
+      viewer displays everything the archive contains.
+    </p>
+  </header>
+
+  <dl class="account-fields">
+    {% if user.full_name %}
+      <dt>Name</dt>
+      <dd>{{ user.full_name }}</dd>
+    {% endif %}
+    {% if user.email_address %}
+      <dt>Email</dt>
+      <dd>{{ user.email_address }}</dd>
+    {% endif %}
+    {% if user.verified_phone_number %}
+      <dt>Verified phone number</dt>
+      <dd>{{ user.verified_phone_number }}</dd>
+    {% endif %}
+    <dt>Account UUID</dt>
+    <dd><code>{{ user.uuid }}</code></dd>
+  </dl>
+
+  <section class="login-history">
+    <h2>Login history</h2>
+    {% if login_rows %}
+      <div class="login-table-wrap">
+        <table class="login-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Method</th>
+              <th>IP address</th>
+              <th>Location</th>
+              <th>Browser &amp; OS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in login_rows %}
+              <tr>
+                <td>
+                  <time datetime="{{ row.timestamp }}">{{ row.timestamp | format_local }}</time>
+                </td>
+                <td>{{ row.method }}</td>
+                <td><code>{{ row.ip_address }}</code></td>
+                <td>{{ row.location }}</td>
+                <td>{{ row.browser_os }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">This export doesn't include login history.</p>
+    {% endif %}
+  </section>
+</section>
+{% endblock %}

@@ -39,6 +39,7 @@ ALL_PAGES = (
     "/conversations",
     "/projects",
     "/memory",
+    "/account",
     "/search",
     "/upload",
     "/inspect",

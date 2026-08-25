@@ -13,54 +13,104 @@
     </p>
   </header>
 
-  {# Sort toggle: same pattern as the conversation list. Global memory is
-     always rendered first regardless of sort; the toggle only affects the
-     project-memories ordering. Labels say "Name", not "Title" — the sort
-     key is the owning project's name. #}
-  <nav class="sort-toggle" aria-label="Sort project memories">
-    <a href="{{ url_for('viewer.memory_view', sort='updated_desc') }}"
-       class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
-      Recently updated
-    </a>
-    <a href="{{ url_for('viewer.memory_view', sort='created_desc') }}"
-       class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
-      Recently created
-    </a>
-    <a href="{{ url_for('viewer.memory_view', sort='name_asc') }}"
-       class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
-      Name (A–Z)
-    </a>
-  </nav>
-
-  {% if not memories and not orphans %}
+  {% if not conversation_memory and not memory_file_groups and not memories and not orphans %}
     <p class="empty">No memory recorded in this archive.</p>
-  {% else %}
-    <div class="memory-list">
-      {% for mem in memories %}
-        {{ memory_block(mem) }}
-      {% endfor %}
-    </div>
+  {% endif %}
 
-    {% if orphans %}
-      <section class="memory-section memory-orphans">
-        <h2>
-          Orphan memories
-          <span class="memory-count">({{ orphans | length }})</span>
-        </h2>
-        <p class="warn">
-          These memories reference projects that aren't in the current
-          archive — likely from a previous export, or a project deleted
-          from Claude.ai before this archive was generated. The parser
-          preserves them rather than silently dropping; surface here so
-          they're visible.
-        </p>
+  {# Record §7 group 1 — the opaque conversation-memory blob. Heading is
+     Appendix C7 copy. #}
+  {% if conversation_memory %}
+    <section class="memory-group">
+      <h2>Conversation memory</h2>
+      <div class="memory-list">
+        {{ memory_block(conversation_memory) }}
+      </div>
+    </section>
+  {% endif %}
+
+  {# Record §7 group 2 — the new memory system's files, grouped by whatever
+     top-level path segments exist (open set — no expected taxonomy). Each
+     file is a collapsible titled by its full path with its updated_at; a
+     frontmatter fence displays verbatim, the body renders as Markdown. #}
+  {% if memory_file_groups %}
+    <section class="memory-group">
+      <h2>Memory files <span class="memory-count">({{ memory_file_count }})</span></h2>
+      {% for group in memory_file_groups %}
+        {% if group.name %}
+          <h3 class="memory-file-group-title"><code>/{{ group.name }}/</code></h3>
+        {% endif %}
         <div class="memory-list">
-          {% for mem in orphans %}
-            {{ memory_block(mem) }}
+          {% for f in group.files %}
+            <details class="memory-block memory-block-file" id="{{ f.anchor_id }}">
+              <summary class="memory-block-summary">
+                <code class="memory-file-path">{{ f.path }}</code>
+                <span class="memory-block-meta">Updated {{ f.updated_at | format_local }}</span>
+              </summary>
+              <div class="memory-block-body">
+                {% if f.frontmatter %}
+                  <pre class="memory-file-frontmatter">{{ f.frontmatter }}</pre>
+                {% endif %}
+                {% if f.body %}
+                  <div class="markdown-body">{{ f.body | markdown }}</div>
+                {% endif %}
+              </div>
+            </details>
           {% endfor %}
         </div>
-      </section>
-    {% endif %}
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {# Record §7 group 3 — project memories, unchanged from legacy behaviour,
+     dangling-project preservation included. #}
+  {% if memories or orphans %}
+    <section class="memory-group">
+      <h2>Project memories</h2>
+
+      {# Sort toggle: affects the project-memories ordering only. Labels say
+         "Name", not "Title" — the sort key is the owning project's name. #}
+      <nav class="sort-toggle" aria-label="Sort project memories">
+        <a href="{{ url_for('viewer.memory_view', sort='updated_desc') }}"
+           class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
+          Recently updated
+        </a>
+        <a href="{{ url_for('viewer.memory_view', sort='created_desc') }}"
+           class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
+          Recently created
+        </a>
+        <a href="{{ url_for('viewer.memory_view', sort='name_asc') }}"
+           class="sort-option{% if sort == 'name_asc' %} active{% endif %}">
+          Name (A–Z)
+        </a>
+      </nav>
+
+      <div class="memory-list">
+        {% for mem in memories %}
+          {{ memory_block(mem) }}
+        {% endfor %}
+      </div>
+
+      {% if orphans %}
+        <section class="memory-section memory-orphans">
+          <h3>
+            Orphan memories
+            <span class="memory-count">({{ orphans | length }})</span>
+          </h3>
+          <p class="warn">
+            These memories reference projects that aren't in the current
+            archive — likely from a previous export, or a project deleted
+            from Claude.ai before this archive was generated. The parser
+            preserves them rather than silently dropping; surface here so
+            they're visible.
+          </p>
+          <div class="memory-list">
+            {% for mem in orphans %}
+              {{ memory_block(mem) }}
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    </section>
   {% endif %}
 </section>
 {% endblock %}

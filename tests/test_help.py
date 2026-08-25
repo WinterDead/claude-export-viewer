@@ -41,6 +41,7 @@ ALL_PAGES = (
     "/conversations",
     "/projects",
     "/memory",
+    "/account",
     "/search",
     "/upload",
     "/inspect",
@@ -235,3 +236,72 @@ def test_shipped_help_md_parses_to_expected_shape() -> None:
     assert "tagging-and-the-triage-workflow" in slugs
     assert "troubleshooting" in slugs
     assert len(slugs) == len(set(slugs))
+
+
+# ---------------------------------------------------------------------------
+# v1.3.0 authored copy (record Appendix) — ships byte-exact
+# ---------------------------------------------------------------------------
+
+C9_CORE = (
+    "Choose your export files and upload them together — every ZIP from a current export "
+    "plus, optionally, the manifest, or a single legacy ZIP. You can load a partial set; "
+    "a banner will tell you what's missing and which features are affected."
+)
+C2_MANIFEST_NOTE = (
+    "Your manifest file contains live, signed download links to your export. Treat it "
+    "like the export itself: don't share it, post it, or commit it anywhere public."
+)
+C6_UPLOAD_CAP = (
+    "Uploads are capped at 200 MB per file — more than any export file seen so far. If "
+    "yours ever exceeds it, set the VIEWER_MAX_UPLOAD_MB environment variable before "
+    "launching to raise the cap."
+)
+C3_SIGNATURES = (
+    "Thinking blocks in current-format exports carry a verification signature — an opaque "
+    "cryptographic blob with no human-readable content. The viewer doesn't display, "
+    "store, or cache signatures; dropping them keeps the local cache smaller. A few other "
+    "technical fields (per-block timing, search-result link lists) are preserved but not "
+    "yet displayed. If you have a use for any of these, open an issue on GitHub."
+)
+C8_README = (
+    "Current exports arrive as a small\nmanifest file whose links download up to four ZIP "
+    "files (conversations, projects, memories,\nand account metadata); download them all "
+    "and upload them to the viewer together, exactly as\ndownloaded — there's no need to "
+    "unzip anything. Older single-ZIP exports load exactly as\nbefore."
+)
+
+
+def _help_source() -> str:
+    return HELP_CONTENT_PATH.read_text(encoding="utf-8")
+
+
+def test_help_carries_c9_loading_copy() -> None:
+    assert C9_CORE in _help_source()
+
+
+def test_help_carries_c2_manifest_safety_note() -> None:
+    assert C2_MANIFEST_NOTE in _help_source()
+
+
+def test_help_carries_c6_upload_cap_copy() -> None:
+    assert C6_UPLOAD_CAP in _help_source()
+
+
+def test_help_carries_c3_signature_disclosure() -> None:
+    src = _help_source()
+    assert "## What the viewer doesn't keep" in src
+    assert C3_SIGNATURES in src
+
+
+def test_readme_getting_your_export_carries_c8() -> None:
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    assert C8_README in readme
+
+
+def test_help_no_stale_single_zip_claims() -> None:
+    """Verify-negatives: the pre-v1.3.0 single-ZIP phrasing must be gone."""
+    src = _help_source()
+    assert "Don't unzip it" not in src
+    assert "choose your export ZIP" not in src
+    assert "capped at 200 MB, which comfortably covers" not in src
+    assert "`active_export.zip`** — the currently loaded export" not in src

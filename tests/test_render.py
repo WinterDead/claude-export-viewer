@@ -27,8 +27,10 @@ from viewer.render import (
     format_local,
     format_local_relative,
     markdown_to_html,
+    pretty_json,
     render_search_snippet,
     slugify,
+    split_frontmatter,
     split_memory_sections,
     summary_preview,
 )
@@ -704,3 +706,54 @@ def test_slugify_empty_or_garbage_returns_default() -> None:
     assert slugify(None) == "section"
     assert slugify("!!!") == "section"
     assert slugify("   ") == "section"
+
+
+# ---------------------------------------------------------------------------
+# split_frontmatter (v1.3.0, record §7)
+# ---------------------------------------------------------------------------
+
+
+def test_split_frontmatter_fenced_content() -> None:
+    fence, body = split_frontmatter("---\nname: topic\n---\n\nBody text.")
+    assert fence == "---\nname: topic\n---"
+    assert body == "Body text."
+
+
+def test_split_frontmatter_without_fence() -> None:
+    fence, body = split_frontmatter("Plain notes, no fence.")
+    assert fence is None
+    assert body == "Plain notes, no fence."
+
+
+def test_split_frontmatter_unclosed_fence_renders_whole_content() -> None:
+    content = "---\nname: dangling\n\nNo closing fence here."
+    fence, body = split_frontmatter(content)
+    assert fence is None
+    assert body == content
+
+
+def test_split_frontmatter_empty_body() -> None:
+    fence, body = split_frontmatter("---\nname: only\n---\n")
+    assert fence == "---\nname: only\n---"
+    assert body == ""
+
+
+def test_split_frontmatter_later_fences_stay_in_body() -> None:
+    fence, body = split_frontmatter("---\na: 1\n---\n\ntext\n\n---\n\nmore")
+    assert fence == "---\na: 1\n---"
+    assert "more" in body
+
+
+# ---------------------------------------------------------------------------
+# pretty_json (v1.3.0, record §9.5 fallback views)
+# ---------------------------------------------------------------------------
+
+
+def test_pretty_json_indents_and_keeps_unicode() -> None:
+    out = pretty_json({"a": [1, 2], "note": "café"})
+    assert '"a": [' in out
+    assert "café" in out
+
+
+def test_pretty_json_degrades_on_unserialisable_input() -> None:
+    assert pretty_json({1, 2}) == str({1, 2})

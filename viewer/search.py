@@ -9,8 +9,9 @@ Indexed kinds:
     message         body=concat of TextBlock/ThinkingBlock + attachments
     project_meta    title=project.name, body=project.description
     project_doc     title=doc.filename, body=doc.content
-    memory_global   body=global_memory.content
+    memory_global   body=global_memory.content (the conversation memory)
     memory_project  body=project_memory.content (resolved + orphan)
+    memory_file     title=file path, body=file content (v1.3.0, record §7)
 
 Snippets use ``\\x02hit\\x02 … \\x02/hit\\x02`` as start/end markers. The
 substitution to ``<mark>`` happens in :func:`viewer.render.render_search_snippet`
@@ -176,6 +177,14 @@ def index_export(conn: sqlite3.Connection, export: Export) -> int:
                 (_scrub(export.global_memory.content),),
             )
 
+        # The new memory system's files (record §7): one row per file, keyed
+        # by its path — the path is the title so hits read as the file.
+        for mf in export.memory_files:
+            conn.execute(
+                "INSERT INTO search (kind, title, body) VALUES ('memory_file', ?, ?)",
+                (_scrub(mf.path), _scrub(mf.content)),
+            )
+
         for orphan in export.orphan_project_memories:
             conn.execute(
                 "INSERT INTO search (kind, project_uuid, body) " "VALUES ('memory_project', ?, ?)",
@@ -198,7 +207,8 @@ def _expected_row_count(export: Export) -> int:
     proj_mems = sum(1 for p in export.projects if p.memory is not None)
     orphans = len(export.orphan_project_memories)
     global_mem = 1 if export.global_memory is not None and export.global_memory.content else 0
-    return convs + msgs + projs + docs + proj_mems + orphans + global_mem
+    memory_files = len(export.memory_files)
+    return convs + msgs + projs + docs + proj_mems + orphans + global_mem + memory_files
 
 
 def _extract_message_body(msg: Message) -> str:

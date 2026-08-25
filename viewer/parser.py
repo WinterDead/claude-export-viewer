@@ -260,6 +260,7 @@ class User:
     uuid: str
     full_name: str
     email_address: str
+    verified_phone_number: str = ""
 
 
 # The new memory system's file records (current format only). ``path`` is
@@ -788,6 +789,7 @@ def _load_users(zf: zipfile.ZipFile) -> User:
         uuid=rec["uuid"],
         full_name=rec.get("full_name", "") or "",
         email_address=rec.get("email_address", "") or "",
+        verified_phone_number=rec.get("verified_phone_number", "") or "",
     )
 
 

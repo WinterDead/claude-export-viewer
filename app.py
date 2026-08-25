@@ -46,6 +46,7 @@ from viewer.render import (
     format_local,
     format_local_relative,
     markdown_to_html,
+    pretty_json,
     render_search_snippet,
     sender_label,
     slugify,
@@ -237,6 +238,7 @@ def create_app(
     app.jinja_env.filters["search_snippet"] = render_search_snippet
     app.jinja_env.filters["slugify"] = slugify
     app.jinja_env.filters["sender_label"] = sender_label
+    app.jinja_env.filters["pretty_json"] = pretty_json
 
     # No-Project sentinel (v1.1 Session B): templates render the option value
     # and label from the same constants the tagging layer defines, so the
@@ -291,6 +293,9 @@ def create_app(
             "g_missing_categories": missing,
             "g_loaded_category_count": len(ALL_CATEGORIES) - len(missing),
             "g_manifest_status": manifest_status,
+            # Nav rule (record §8): the Account entry shows whenever
+            # users.json is in the viewed set, both formats.
+            "g_has_account": live_export.user is not None,
         }
 
     app.register_blueprint(bp)

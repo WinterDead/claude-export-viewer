@@ -58,6 +58,8 @@ from viewer.parser import (
 from viewer.render import (
     compute_render_path,
     conversation_display_title,
+    slugify,
+    split_frontmatter,
     split_help_page,
     split_memory_sections,
 )
@@ -177,7 +179,7 @@ def index() -> str:
         _memory_block(
             kind="global",
             anchor_id="global-memory",
-            title="Global memory",
+            title="Conversation memory",
             body=export.global_memory.content,
         )
         if export.global_memory is not None and export.global_memory.content
@@ -526,34 +528,54 @@ def project_detail(uuid: str):
 
 @bp.route("/memory")
 def memory_view() -> str:
-    """Single page rendering every memory blob in the archive (plan §12 step 5,
-    polished per the collapsibility brief).
+    """The Memory page: whichever of the record §7 groups the archive
+    supplies — conversation memory, memory files (the new memory system,
+    current format only), and project memories (unchanged legacy behaviour,
+    dangling-project preservation included).
 
-    Layout: global memory always first, then project memories sorted per the
-    ``?sort=`` query string, then orphan memories (project_uuid no longer in
-    the archive — preserve-and-flag).
-
-    Each memory is rendered as a top-level ``<details>`` (collapsed by
-    default in the template); per-section ``<details>`` (expanded by
-    default) split the body when section headings are detectable.
+    Memory files are grouped by whatever top-level path segments exist — an
+    open set; the viewer never enumerates an expected taxonomy. Each memory
+    is a top-level ``<details>`` (collapsed by default); per-section
+    ``<details>`` (expanded by default) split conversation/project memories
+    when headings are detectable.
     """
     export = _current_export()
     sort = request.args.get("sort", DEFAULT_MEMORY_SORT)
     if sort not in MEMORY_SORT_OPTIONS:
         sort = DEFAULT_MEMORY_SORT
 
-    memories: list[dict] = []
-
+    conversation_memory: dict | None = None
     if export.global_memory is not None and export.global_memory.content:
-        memories.append(
-            _memory_block(
-                kind="global",
-                anchor_id="global-memory",
-                title="Global memory",
-                body=export.global_memory.content,
-            )
+        conversation_memory = _memory_block(
+            kind="global",
+            anchor_id="global-memory",
+            title="Conversation memory",
+            body=export.global_memory.content,
         )
 
+    # Memory files, grouped by first path segment ("" = files at the root),
+    # groups and files ordered by path. Frontmatter split per record §7.
+    file_groups: dict[str, list[dict]] = {}
+    for mf in sorted(export.memory_files, key=lambda f: f.path):
+        segments = mf.path.strip("/").split("/")
+        group = segments[0] if len(segments) > 1 else ""
+        fence, body = split_frontmatter(mf.content)
+        file_groups.setdefault(group, []).append(
+            {
+                "path": mf.path,
+                "anchor_id": f"memory-file-{slugify(mf.path)}",
+                "updated_at": mf.updated_at,
+                "frontmatter": fence,
+                "body": body,
+            }
+        )
+    # Root files first, then directory groups alphabetically.
+    memory_file_groups = [
+        {"name": name, "files": file_groups[name]}
+        for name in sorted(file_groups, key=lambda n: (n != "", n))
+    ]
+
+    memories: list[dict] = []
     projects_with_memory = [p for p in export.projects if p.memory is not None]
     projects_with_memory = _sort_memories(projects_with_memory, sort)
     for p in projects_with_memory:
@@ -581,6 +603,9 @@ def memory_view() -> str:
 
     return render_template(
         "memory.html",
+        conversation_memory=conversation_memory,
+        memory_file_groups=memory_file_groups,
+        memory_file_count=len(export.memory_files),
         memories=memories,
         orphans=orphans,
         sort=sort,
@@ -628,6 +653,49 @@ def _sort_memories(projects: list[Project], sort: str) -> list[Project]:
 
 
 # ---------------------------------------------------------------------------
+# Account page (v1.3.0, record §8)
+# ---------------------------------------------------------------------------
+
+
+def _login_location(event) -> str:
+    """City, region, country condensed — nulls omitted, ``—`` when empty."""
+    parts = [p for p in (event.city, event.region, event.country) if p]
+    return ", ".join(parts) if parts else "—"
+
+
+def _login_browser_os(event) -> str:
+    """The ``Browser & OS`` cell, condensed from the user-agent fields."""
+    browser = " ".join(p for p in (event.browser_family, event.browser_version) if p)
+    os_part = " ".join(p for p in (event.os_family, event.os_version) if p)
+    parts = [p for p in (browser, os_part) if p]
+    return " · ".join(parts) if parts else "—"
+
+
+@bp.route("/account")
+def account_view() -> str:
+    """Identity fields from ``users.json`` plus, in the current format, the
+    login history — newest first. Present whenever ``users.json`` is in the
+    active set (both formats); 404 otherwise, matching the hidden nav entry.
+    """
+    export = _current_export()
+    if export.user is None:
+        abort(404)
+
+    events = sorted(export.login_events, key=lambda e: e.timestamp, reverse=True)
+    rows = [
+        {
+            "timestamp": e.timestamp,
+            "method": e.method or "—",
+            "ip_address": e.ip_address or "—",
+            "location": _login_location(e),
+            "browser_os": _login_browser_os(e),
+        }
+        for e in events
+    ]
+    return render_template("account.html", user=export.user, login_rows=rows)
+
+
+# ---------------------------------------------------------------------------
 # Search (plan §12 step 6)
 # ---------------------------------------------------------------------------
 
@@ -650,7 +718,7 @@ def search_view() -> str:
     query = (request.args.get("q") or "").strip()
     results = search(conn, query, limit=SEARCH_RESULT_LIMIT)
 
-    conv_groups, project_groups, memory_global, memory_orphans = _group_search_hits(
+    conv_groups, project_groups, memory_global, memory_files, memory_orphans = _group_search_hits(
         results.hits, export
     )
 
@@ -661,6 +729,7 @@ def search_view() -> str:
         conv_groups=conv_groups,
         project_groups=project_groups,
         memory_global=memory_global,
+        memory_files=memory_files,
         memory_orphans=memory_orphans,
         result_limit=SEARCH_RESULT_LIMIT,
     )
@@ -668,7 +737,7 @@ def search_view() -> str:
 
 def _group_search_hits(
     hits: list[SearchHit], export: Export
-) -> tuple[list[dict], list[dict], dict | None, list[dict]]:
+) -> tuple[list[dict], list[dict], dict | None, list[dict], list[dict]]:
     """Bucket flat BM25-ordered hits into the structures the template needs.
 
     - Conversation/message hits group by ``conversation_uuid`` and carry a
@@ -685,6 +754,7 @@ def _group_search_hits(
     conv_buckets: dict[str, dict] = {}
     project_buckets: dict[str, dict] = {}
     memory_global: dict | None = None
+    memory_files: list[dict] = []
     memory_orphans: list[dict] = []
 
     for hit in hits:
@@ -741,10 +811,15 @@ def _group_search_hits(
         elif hit.kind == "memory_global":
             if memory_global is None or hit.rank < memory_global["hit"].rank:
                 memory_global = {"hit": hit}
+        elif hit.kind == "memory_file":
+            # Keyed by path (the row's title); links to the file's anchor on
+            # the Memory page (record §7).
+            memory_files.append({"hit": hit, "anchor": f"memory-file-{slugify(hit.title)}"})
 
     conv_groups = sorted(conv_buckets.values(), key=lambda g: g["best_rank"])
     project_groups = sorted(project_buckets.values(), key=lambda g: g["best_rank"])
-    return conv_groups, project_groups, memory_global, memory_orphans
+    memory_files.sort(key=lambda m: m["hit"].rank)
+    return conv_groups, project_groups, memory_global, memory_files, memory_orphans
 
 
 # ---------------------------------------------------------------------------

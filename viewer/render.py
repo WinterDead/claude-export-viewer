@@ -573,7 +573,13 @@ def block_type(block: ContentBlock) -> str:
     Avoids ``block.__class__.__name__`` peppered through the Jinja, and keeps
     the parser's class names from leaking into the template layer.
     """
-    from viewer.parser import TextBlock, ThinkingBlock, ToolResultBlock, ToolUseBlock
+    from viewer.parser import (
+        InjectedPromptBlock,
+        TextBlock,
+        ThinkingBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+    )
 
     if isinstance(block, TextBlock):
         return "text"
@@ -583,4 +589,38 @@ def block_type(block: ContentBlock) -> str:
         return "tool_use"
     if isinstance(block, ToolResultBlock):
         return "tool_result"
+    if isinstance(block, InjectedPromptBlock):
+        return "injected_prompt"
     return "unknown"
+
+
+def split_frontmatter(content: str) -> tuple[str | None, str]:
+    """Split a memory file's content into its frontmatter fence and body.
+
+    Record §7: content opening with a ``---`` fence shows the fence block
+    verbatim (preformatted) with the body below rendered as Markdown. Returns
+    ``(fence_block, body)`` — ``fence_block`` is the whole fence including
+    both ``---`` lines, or ``None`` when the content doesn't open with one
+    (including an unclosed fence, which renders entirely as Markdown rather
+    than swallowing the body). No YAML parsing — the locked stack stands.
+    """
+    lines = content.split("\n")
+    if not lines or lines[0].strip() != "---":
+        return None, content
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            fence = "\n".join(lines[: i + 1])
+            body = "\n".join(lines[i + 1 :]).lstrip("\n")
+            return fence, body
+    return None, content
+
+
+def pretty_json(value: object) -> str:
+    """Indented JSON for the collapsed preformatted fallback views (record
+    §9.5). ``ensure_ascii=False`` keeps non-ASCII content readable."""
+    import json
+
+    try:
+        return json.dumps(value, indent=2, ensure_ascii=False)
+    except (TypeError, ValueError):
+        return str(value)

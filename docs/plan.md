@@ -592,8 +592,20 @@ format (manifest + four category zips replacing the single zip) and the memory s
   both enforcement sides, stale comment corrected); the degraded-view banner with the
   Appendix C1 copy byte-exact, manifest expected-vs-supplied included, following the
   viewed export (inspected subsets included); inspect no-trace extended to sets; and
-  real-rendered-form tests for both pickers. Phase 4 (rendering and copy) follows under
-  the same brief.
+  real-rendered-form tests for both pickers. Phase 4 shipped *(locked)*: the Memory page
+  restructured into the record §7 groups (Conversation memory, Memory files with
+  open-set path grouping and verbatim frontmatter fences, Project memories with orphans)
+  with C7 copy; FTS extended with the `memory_file` kind (invariant updated in
+  lockstep) and memory-file search hits linking to per-file anchors; the Account page
+  (record §8, C4 copy, nav hidden without `users.json`, login history newest-first,
+  local timestamps); all six Tier 1 block behaviours (record §9, C5/C10 copy —
+  sanitiser allowlist untouched, as the hard stop required); help updated with C2, C3,
+  C6, and C9 verbatim plus drafted Memory/Account/getting-your-export/backups passages
+  flagged for operator review; README "Getting your export" replaced with C8; and the
+  operator hand-test brief committed
+  (`docs/briefs/v1.3.0-session-s-operator-hand-test.md`) — its results are what clears
+  the upload shape's *provisional* markers. Session T (dark mode, README polish,
+  screenshots, release) closes the arc.
 
 ### Later (unscheduled, non-blocking)
 

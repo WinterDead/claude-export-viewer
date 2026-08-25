@@ -104,7 +104,8 @@
       <p>
         <strong>What's searched:</strong> conversation titles and summaries, every
         message (including messages on alternate branches), project names and
-        descriptions, knowledge documents, and all memory blobs.
+        descriptions, knowledge documents, and all memory — the conversation
+        memory, memory files, and project memories.
       </p>
     </div>
   </details>
@@ -219,19 +220,29 @@
     {% endif %}
 
     {# ---------- Memory hits ---------- #}
-    {% if memory_global or memory_orphans %}
+    {% if memory_global or memory_files or memory_orphans %}
       <section class="search-section">
         <h2>Memory</h2>
         {% if memory_global %}
           <article class="search-group">
             <h3 class="search-group-title">
               <a href="{{ url_for('viewer.memory_view') }}#global-memory">
-                Global memory
+                Conversation memory
               </a>
             </h3>
             <div class="search-snippet">{{ memory_global.hit.snippet | search_snippet }}</div>
           </article>
         {% endif %}
+        {% for f in memory_files %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.memory_view') }}#{{ f.anchor }}">
+                <code class="memory-file-path">{{ f.hit.title }}</code>
+              </a>
+            </h3>
+            <div class="search-snippet">{{ f.hit.snippet | search_snippet }}</div>
+          </article>
+        {% endfor %}
         {% for o in memory_orphans %}
           <article class="search-group">
             <h3 class="search-group-title">

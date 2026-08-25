@@ -1,9 +1,56 @@
-{# Single-message partial. Rendering scope per plan §12 step 3:
-   - text         → markdown
-   - thinking     → collapsible <details>
-   - tool_use     → typed placeholder card (block type + tool name)
-   - tool_result  → typed placeholder card (block type + inner block count)
-   Artifacts, nested tool_result, and Pygments syntax highlighting are deferred. #}
+{# Single-message partial. Rendering scope per plan §12 step 3, extended by
+   the v1.3.0 Tier 1 behaviours (record §9):
+   - text             → markdown, plus a Sources list when citations exist
+   - thinking         → collapsible <details>; first summary as the teaser,
+                        full summary list at the top of the expanded block,
+                        hidden-in-the-app badge (copy C5)
+   - tool_use         → card (block type + tool name), display_content body
+   - tool_result      → card; display_content body, or Markdown-rendered
+                        text for output_format_category "md"
+   - injected_prompt  → labelled collapsible card, collapsed by default
+   Artifacts and nested tool_result rendering remain deferred. #}
+
+{% macro display_content_body(dc) %}
+  {# Record §9.5: display_content becomes the tool card's body. The type set
+     is open — json_block, rich_content, and anything unknown fall back to a
+     collapsed preformatted JSON view. The code_block markup rides the
+     existing highlighter (``.markdown-body pre code`` scope); tables and
+     links are template-built — no sanitiser involvement anywhere here. #}
+  {% if dc.type == 'text' %}
+    <div class="display-content display-content-text">{{ dc.text }}</div>
+  {% elif dc.type == 'code_block' %}
+    <div class="markdown-body display-content display-content-code"><pre><code class="language-{{ dc.language or '' }}">{{ dc.code }}</code></pre></div>
+  {% elif dc.type == 'table' %}
+    <div class="display-content display-content-table">
+      <table>
+        {% for row in dc.table %}
+          <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+        {% endfor %}
+      </table>
+    </div>
+  {% elif dc.type == 'rich_link' %}
+    {% set link = dc.link or {} %}
+    <div class="display-content display-content-link">
+      <a href="{{ link.url }}">{{ link.title or link.url }}</a>
+    </div>
+  {% elif dc.type == 'rich_content' %}
+    <details class="display-content display-content-json">
+      <summary>rich_content</summary>
+      <pre>{{ dc.content | pretty_json }}</pre>
+    </details>
+  {% elif dc.type == 'json_block' %}
+    <details class="display-content display-content-json">
+      <summary>json_block</summary>
+      <pre>{{ dc.json_block }}</pre>
+    </details>
+  {% else %}
+    <details class="display-content display-content-json">
+      <summary>{{ dc.type }}</summary>
+      <pre>{{ dc | pretty_json }}</pre>
+    </details>
+  {% endif %}
+{% endmacro %}
+
 <article class="msg msg-{{ msg.sender }}" id="msg-{{ msg.uuid }}">
   <header class="msg-header">
     <span class="msg-sender">{{ msg.sender | sender_label }}</span>
@@ -18,13 +65,45 @@
       {% set bt = block | block_type %}
       {% if bt == 'text' %}
         <div class="markdown-body">{{ block.text | markdown }}</div>
+        {% if block.citations %}
+          {# Record §9.4: a Sources list beneath the block — deliberately not
+             inline markers, because the offsets index the raw text and don't
+             survive Markdown rendering. Heading is Appendix C10 copy. #}
+          <div class="text-sources">
+            <span class="text-sources-heading">Sources</span>
+            <ul class="text-sources-list">
+              {% for c in block.citations %}
+                {% set c_url = (c.get('details') or {}).get('url') %}
+                {% if c_url %}
+                  <li><a href="{{ c_url }}">{{ c_url }}</a></li>
+                {% endif %}
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
       {% elif bt == 'thinking' %}
         <details class="thinking">
           <summary>
-            Thinking ({{ block.thinking | length }} chars)
+            {% if block.summaries %}
+              {{ block.summaries[0] }}
+            {% else %}
+              Thinking ({{ block.thinking | length }} chars)
+            {% endif %}
             {% if block.truncated %} · truncated{% endif %}
             {% if block.cut_off %} · cut off{% endif %}
+            {% if block.thinking_hidden %}
+              {# Badge and tooltip are Appendix C5 copy — the viewer shows
+                 everything in the user's export (record §9.3). #}
+              <span class="thinking-hidden-badge" title="This thinking block is marked hidden in the Claude app; the viewer shows everything in your export.">Hidden in the app</span>
+            {% endif %}
           </summary>
+          {% if block.summaries %}
+            <ul class="thinking-summaries">
+              {% for s in block.summaries %}
+                <li>{{ s }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
           <div class="markdown-body thinking-body">{{ block.thinking | markdown }}</div>
         </details>
       {% elif bt == 'tool_use' %}
@@ -32,6 +111,9 @@
           <span class="block-card-tag">tool_use</span>
           <span class="block-card-name">{{ block.name }}</span>
           {% if block.is_mcp %}<span class="block-card-mcp">MCP</span>{% endif %}
+          {% if block.display_content %}
+            {{ display_content_body(block.display_content) }}
+          {% endif %}
         </aside>
       {% elif bt == 'tool_result' %}
         <aside class="block-card block-tool-result {% if block.is_error %}is-error{% endif %}">
@@ -41,7 +123,24 @@
             {{ block.inner | length }} inner block{% if block.inner | length != 1 %}s{% endif %}
             {% if block.is_error %} · error{% endif %}
           </span>
+          {% if block.display_content %}
+            {{ display_content_body(block.display_content) }}
+          {% elif block.output_format_category == 'md' %}
+            {# Record §9.6: md-format results render their text through the
+               existing Markdown→sanitiser pipeline. #}
+            {% for inner in block.inner %}
+              {% if inner.get('type') == 'text' and inner.get('text') %}
+                <div class="markdown-body display-content">{{ inner['text'] | markdown }}</div>
+              {% endif %}
+            {% endfor %}
+          {% endif %}
         </aside>
+      {% elif bt == 'injected_prompt' %}
+        {# Record §9.1: a labelled collapsible card, collapsed by default. #}
+        <details class="injected-prompt">
+          <summary>Injected prompt</summary>
+          <div class="markdown-body injected-prompt-body">{{ block.prompt | markdown }}</div>
+        </details>
       {% else %}
         {# Preserve-and-flag placeholder: the parser kept the block as an
            UnknownBlock carrying its raw type, so the card can name it. #}

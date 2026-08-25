@@ -99,10 +99,13 @@ Then open http://127.0.0.1:5000/.
 ## Getting your export
 
 In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open
-**Settings**, go to **Privacy**, and click **Export data**. Anthropic emails you a download link — it expires after 24 hours, so download
-promptly. Upload the ZIP to the viewer exactly as downloaded; there's no need to unzip it. The
-in-app **Help** page covers the rest, from what the export contains to backups and
-troubleshooting.
+**Settings**, go to **Privacy**, and click **Export data**. Anthropic emails you a download
+link — it expires after 24 hours, so download promptly. Current exports arrive as a small
+manifest file whose links download up to four ZIP files (conversations, projects, memories,
+and account metadata); download them all and upload them to the viewer together, exactly as
+downloaded — there's no need to unzip anything. Older single-ZIP exports load exactly as
+before. The in-app **Help** page covers the rest, from what the export contains to backups
+and troubleshooting.
 
 ## Development
 
