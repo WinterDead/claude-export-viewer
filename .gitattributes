@@ -12,3 +12,6 @@ static/vendor/** -text
 # archives are detected as binary anyway; corrupt_export.zip is deliberately
 # text-like bytes, so pin the whole set against EOL conversion.
 tests/fixtures/*.zip -text
+
+# 
+docs/briefs/** export-ignore
