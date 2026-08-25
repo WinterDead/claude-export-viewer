@@ -13,6 +13,8 @@ Step 4 ergonomic shape (confirmed in §12 step 4):
 from __future__ import annotations
 
 import io
+import logging
+import os
 import shutil
 import zipfile
 from datetime import date
@@ -30,7 +32,7 @@ from flask import (
 )
 
 from viewer.cache import invalidate as invalidate_cache
-from viewer.cache import zip_hash
+from viewer.cache import set_fingerprint
 from viewer.db import get_db
 from viewer.export import (
     ExportOptions,
@@ -41,12 +43,17 @@ from viewer.export import (
 from viewer.history import all_history, record_load
 from viewer.inspect import begin_inspection, end_inspection, get_inspection
 from viewer.parser import (
+    ALL_CATEGORIES,
+    CONTAINER_LEGACY,
     Conversation,
     Export,
     ExportFormatError,
     Project,
     load_export,
-    load_export_from_bytes,
+    load_export_from_bytes_set,
+    manifest_file_count,
+    sniff_container,
+    sniff_manifest,
 )
 from viewer.render import (
     compute_render_path,
@@ -741,115 +748,326 @@ def _group_search_hits(
 
 
 # ---------------------------------------------------------------------------
-# Upload (plan §12 step 7)
+# Upload (plan §12 step 7; multi-file sets since v1.3.0, record §4/§5)
 # ---------------------------------------------------------------------------
 
 
-# 200 MB cap covers a hypothetical multi-batch single-zip; the real export
-# is ~11 MB. Enforced both on upload and via Flask's MAX_CONTENT_LENGTH so
-# pathological uploads don't stream into memory before we can reject them.
-UPLOAD_MAX_BYTES = 200 * 1024 * 1024
+logger = logging.getLogger(__name__)
+
+_MANIFEST_KIND = "manifest"
+
+
+def _read_upload_cap_mb() -> int:
+    """The per-file upload cap in MB — the documented configuration knob
+    ``VIEWER_MAX_UPLOAD_MB``, read at startup, default 200 (record §4)."""
+    raw = os.environ.get("VIEWER_MAX_UPLOAD_MB", "")
+    if not raw:
+        return 200
+    try:
+        mb = int(raw)
+    except ValueError:
+        logger.warning("VIEWER_MAX_UPLOAD_MB=%r is not a number — using the default 200", raw)
+        return 200
+    if mb <= 0:
+        logger.warning("VIEWER_MAX_UPLOAD_MB=%r is not positive — using the default 200", raw)
+        return 200
+    return mb
+
+
+# Per-file cap. The cap is a parse-memory guardrail, not a format limit: the
+# current format's per-category delivery and Anthropic's own part-splitting
+# make the default generous (the reference archive's largest file, the
+# conversations zip, is 38 MB compressed), and power users with large
+# archives can raise it locally via the knob without a release (record §4).
+UPLOAD_MAX_BYTES = _read_upload_cap_mb() * 1024 * 1024
+
+# Request-level backstop for Flask's MAX_CONTENT_LENGTH: one full set (four
+# category zips plus the manifest) at the per-file cap. Pathological uploads
+# beyond this are rejected before they stream into memory; the exact
+# per-file rule is enforced while staging each file.
+MAX_REQUEST_BYTES = UPLOAD_MAX_BYTES * 5
+
+
+def _stream_capped(src, dest: Path, cap: int) -> bool:
+    """Stream ``src`` to ``dest``; return False (dest removed) if it
+    exceeds ``cap`` bytes."""
+    written = 0
+    with dest.open("wb") as out:
+        while chunk := src.read(1 << 16):
+            written += len(chunk)
+            if written > cap:
+                out.close()
+                dest.unlink(missing_ok=True)
+                return False
+            out.write(chunk)
+    return True
+
+
+def _sniff_staged_file(path: Path, filename: str) -> str | None:
+    """Identify a staged upload by content (record §2): a manifest ``.json``,
+    a legacy archive, or a current category zip. ``None`` = unrecognised."""
+    if filename.lower().endswith(".json"):
+        return _MANIFEST_KIND if sniff_manifest(path.read_bytes()) else None
+    try:
+        with zipfile.ZipFile(path) as zf:
+            return sniff_container(set(zf.namelist()))
+    except zipfile.BadZipFile:
+        return None
+
+
+def summarise_set(slotted: dict[str, str]) -> str:
+    """The history/banner display name for a loaded set (record §5):
+    ``kind → filename``. A lone legacy archive keeps its filename —
+    continuity with pre-set history rows; anything else summarises, e.g.
+    ``3 files: conversations, projects, memories``."""
+    if set(slotted) == {CONTAINER_LEGACY}:
+        return slotted[CONTAINER_LEGACY]
+    order = [*ALL_CATEGORIES, CONTAINER_LEGACY, _MANIFEST_KIND]
+    parts = [k for k in order if k in slotted]
+    n = len(parts)
+    return f"{n} file{'s' if n != 1 else ''}: {', '.join(parts)}"
+
+
+def summarise_set_dir(set_dir: Path) -> str:
+    """:func:`summarise_set` over a stored set directory — the startup-load
+    twin of the upload path's summary."""
+    slotted: dict[str, str] = {}
+    for p in sorted(set_dir.iterdir()):
+        if not p.is_file():
+            continue
+        kind = _sniff_staged_file(p, p.name)
+        if kind is not None:
+            slotted[kind] = p.name
+    return summarise_set(slotted) if slotted else set_dir.name
 
 
 @bp.route("/upload", methods=["GET"])
 def upload_form() -> str:
-    return render_template("upload.html", error=None)
+    return render_template("upload.html", error=None, cap_mb=UPLOAD_MAX_BYTES // (1024 * 1024))
+
+
+def _upload_error(message: str, status: int = 400):
+    return (
+        render_template("upload.html", error=message, cap_mb=UPLOAD_MAX_BYTES // (1024 * 1024)),
+        status,
+    )
 
 
 @bp.route("/upload", methods=["POST"])
 def upload_post():
     _refuse_while_inspecting()
-    file = request.files.get("export_zip")
-    if file is None or not file.filename:
-        return render_template("upload.html", error="No file selected."), 400
-    if not file.filename.lower().endswith(".zip"):
-        return render_template("upload.html", error="Upload must be a .zip file."), 400
+    files = [f for f in request.files.getlist("export_files") if f is not None and f.filename]
+    if not files:
+        return _upload_error("No file selected.")
+    for f in files:
+        if not f.filename.lower().endswith((".zip", ".json")):
+            return _upload_error("Files must be .zip archives or a manifest .json.")
 
+    active_set: Path = current_app.config["ACTIVE_SET_PATH"]
     active_zip: Path = current_app.config["ACTIVE_ZIP_PATH"]
     pickle_path: Path = current_app.config["PARSE_CACHE_PATH"]
-    active_zip.parent.mkdir(parents=True, exist_ok=True)
+    active_set.parent.mkdir(parents=True, exist_ok=True)
 
-    # Stream to a sibling tempfile then atomic-rename — avoids leaving a
-    # half-written active_export.zip if the upload errors mid-stream.
-    tmp = active_zip.with_suffix(".upload.tmp")
+    # Stage the whole submission next to the active set, then sniff, parse,
+    # and only on success swap it in — the parse-before-replace pattern
+    # generalised to sets (record §4).
+    stage = active_set.parent / "active_export.stage"
+    if stage.exists():
+        shutil.rmtree(stage)
+    stage.mkdir()
+
     try:
-        with tmp.open("wb") as out:
-            shutil.copyfileobj(file.stream, out, length=1 << 16)
-    except OSError as e:
-        tmp.unlink(missing_ok=True)
-        return render_template("upload.html", error=f"Could not save upload: {e}"), 500
+        slotted: dict[str, tuple[Path, str]] = {}
+        for f in files:
+            basename = Path(f.filename).name
+            dest = stage / basename
+            try:
+                if not _stream_capped(f.stream, dest, UPLOAD_MAX_BYTES):
+                    return _upload_error(
+                        f"{basename} exceeds the {UPLOAD_MAX_BYTES // (1024 * 1024)} MB "
+                        "per-file cap."
+                    )
+            except OSError as e:
+                return _upload_error(f"Could not save upload: {e}", 500)
 
-    # Validate by parsing BEFORE we replace the active zip / EXPORT. If the
-    # zip is malformed, surface ExportFormatError as a friendly message and
-    # leave the previous archive in place.
-    try:
-        new_export = load_export(tmp)
-    except ExportFormatError as e:
-        tmp.unlink(missing_ok=True)
-        return render_template("upload.html", error=f"Couldn't parse archive: {e}"), 400
+            kind = _sniff_staged_file(dest, basename)
+            if kind is None:
+                return _upload_error(f"{basename} isn't a recognised export file.")
+            if kind in slotted:
+                # Duplicate category in one submission: last file wins, with
+                # a warning (record §4).
+                prev_path, prev_name = slotted[kind]
+                logger.warning(
+                    "duplicate %s file in one upload: %s replaces %s", kind, basename, prev_name
+                )
+                if prev_path != dest:
+                    prev_path.unlink(missing_ok=True)
+            slotted[kind] = (dest, basename)
 
-    # Hash once, before the move — the same digest that keys the pickle
-    # cache, reused for the upload-history row below (A3).
-    new_sha = zip_hash(tmp)
+        zip_paths = [p for kind, (p, _n) in slotted.items() if kind != _MANIFEST_KIND]
+        if not zip_paths:
+            return _upload_error(
+                "The manifest alone doesn't contain your data — include the export "
+                ".zip files as well."
+            )
 
-    # Commit: move tempfile into place, drop the stale parse cache, swap
-    # in-memory Export, rebuild the search index. Order matters — Export
-    # swap last, so a route in flight either sees the old or the new fully.
-    tmp.replace(active_zip)
+        # Validate by parsing BEFORE anything replaces the active set. A
+        # malformed set surfaces as a friendly message and the previous
+        # export stays in place.
+        try:
+            new_export = load_export(sorted(zip_paths))
+        except ExportFormatError as e:
+            return _upload_error(f"Couldn't parse archive: {e}")
+
+        # Fingerprint once, over the staged set as received (manifest
+        # included) — the same digest keys the pickle cache and identifies
+        # the set in the upload-history row.
+        staged_files = sorted(p for p in stage.iterdir() if p.is_file())
+        new_fingerprint = set_fingerprint(staged_files)
+
+        # Commit: swap the staged set in, retire any pre-set active zip,
+        # drop the stale parse cache, rebuild the index, swap the in-memory
+        # Export last so a route in flight sees old or new fully.
+        old = active_set.parent / "active_export.old"
+        if old.exists():
+            shutil.rmtree(old)
+        if active_set.exists():
+            active_set.rename(old)
+        stage.rename(active_set)
+        if old.exists():
+            shutil.rmtree(old)
+        active_zip.unlink(missing_ok=True)
+    finally:
+        if stage.exists():
+            shutil.rmtree(stage)
+
     invalidate_cache(pickle_path)
 
     db = get_db()
     index_export(db, new_export)
     current_app.config["EXPORT"] = new_export
-    # A successful upload replaced the stored file, so the graceful-startup
+    current_app.config["MANIFEST_STATUS"] = manifest_status_for_set(active_set)
+    # A successful upload replaced the stored set, so the graceful-startup
     # banner condition clears with it (v1.1.5 Session I).
     current_app.config["STORED_EXPORT_FAILED"] = False
 
     # Record after the swap succeeded. Uploads always record, even when the
-    # sha matches an earlier row — an explicit user action is worth logging.
+    # fingerprint matches an earlier row — an explicit user action is worth
+    # logging.
     record_load(
         db,
         source="upload",
-        filename=file.filename,
-        zip_sha256=new_sha,
+        filename=summarise_set({kind: name for kind, (_p, name) in slotted.items()}),
+        zip_sha256=new_fingerprint,
         export=new_export,
     )
 
     return redirect(url_for("viewer.index"))
 
 
+def manifest_status_for_set(set_dir: Path) -> tuple[int, int] | None:
+    """Expected-vs-supplied counts for the degraded-view banner (record §4):
+    ``(manifest's data-file count, zips supplied)``, or ``None`` when the
+    set carries no manifest. The manifest is metadata only — never fetched."""
+    if not set_dir.is_dir():
+        return None
+    expected: int | None = None
+    supplied = 0
+    for p in sorted(set_dir.iterdir()):
+        if not p.is_file():
+            continue
+        if p.suffix.lower() == ".json":
+            m = manifest_file_count(p.read_bytes())
+            if m is not None:
+                expected = m
+        elif p.suffix.lower() == ".zip":
+            supplied += 1
+    if expected is None:
+        return None
+    return expected, supplied
+
+
 # ---------------------------------------------------------------------------
-# Inspect mode (v1.2 Session K)
+# Inspect mode (v1.2 Session K; multi-file sets since v1.3.0)
 # ---------------------------------------------------------------------------
 
 
 @bp.route("/inspect", methods=["GET"])
 def inspect_form() -> str:
-    return render_template("inspect.html", error=None)
+    return render_template("inspect.html", error=None, cap_mb=UPLOAD_MAX_BYTES // (1024 * 1024))
+
+
+def _inspect_error(message: str, status: int = 400):
+    return (
+        render_template("inspect.html", error=message, cap_mb=UPLOAD_MAX_BYTES // (1024 * 1024)),
+        status,
+    )
 
 
 @bp.route("/inspect", methods=["POST"])
 def inspect_post():
     """Open an export read-only, without touching the stored one.
 
-    The no-trace rule: the upload is read straight into memory and parsed
-    from there — no tempfile step, no ``cache/`` write, no parse pickle, no
-    history row. A parse failure errors on the Inspect page and leaves the
-    currently viewed export (primary or previously inspected) untouched.
+    The no-trace rule: the uploaded files are read straight into memory and
+    parsed from there — no tempfile step, no ``cache/`` write, no parse
+    pickle, no history row. A parse failure errors on the Inspect page and
+    leaves the currently viewed export (primary or previously inspected)
+    untouched. Same multi-file picker and detection as Upload (record §4).
     """
-    file = request.files.get("export_zip")
-    if file is None or not file.filename:
-        return render_template("inspect.html", error="No file selected."), 400
-    if not file.filename.lower().endswith(".zip"):
-        return render_template("inspect.html", error="File must be a .zip."), 400
+    files = [f for f in request.files.getlist("export_files") if f is not None and f.filename]
+    if not files:
+        return _inspect_error("No file selected.")
+    for f in files:
+        if not f.filename.lower().endswith((".zip", ".json")):
+            return _inspect_error("Files must be .zip archives or a manifest .json.")
 
-    data = file.stream.read()
+    slotted: dict[str, tuple[str, bytes]] = {}
+    for f in files:
+        basename = Path(f.filename).name
+        data = f.stream.read(UPLOAD_MAX_BYTES + 1)
+        if len(data) > UPLOAD_MAX_BYTES:
+            return _inspect_error(
+                f"{basename} exceeds the {UPLOAD_MAX_BYTES // (1024 * 1024)} MB per-file cap."
+            )
+        if basename.lower().endswith(".json"):
+            kind: str | None = _MANIFEST_KIND if sniff_manifest(data) else None
+        else:
+            try:
+                with zipfile.ZipFile(io.BytesIO(data)) as zf:
+                    kind = sniff_container(set(zf.namelist()))
+            except zipfile.BadZipFile:
+                kind = None
+        if kind is None:
+            return _inspect_error(f"{basename} isn't a recognised export file.")
+        if kind in slotted:
+            logger.warning(
+                "duplicate %s file in one inspection: %s replaces %s",
+                kind,
+                basename,
+                slotted[kind][0],
+            )
+        slotted[kind] = (basename, data)
+
+    zips = [(name, data) for kind, (name, data) in slotted.items() if kind != _MANIFEST_KIND]
+    if not zips:
+        return _inspect_error(
+            "The manifest alone doesn't contain your data — include the export "
+            ".zip files as well."
+        )
+
     try:
-        export = load_export_from_bytes(data, name=file.filename)
+        export = load_export_from_bytes_set(sorted(zips))
     except ExportFormatError as e:
-        return render_template("inspect.html", error=f"Couldn't parse archive: {e}"), 400
+        return _inspect_error(f"Couldn't parse archive: {e}")
 
-    begin_inspection(current_app, export, file.filename)
+    manifest_status: tuple[int, int] | None = None
+    if _MANIFEST_KIND in slotted:
+        m = manifest_file_count(slotted[_MANIFEST_KIND][1])
+        if m is not None:
+            manifest_status = (m, len(zips))
+
+    display = summarise_set({kind: name for kind, (name, _d) in slotted.items()})
+    begin_inspection(current_app, export, display, manifest_status=manifest_status)
     return redirect(url_for("viewer.index"))
 
 

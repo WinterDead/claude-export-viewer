@@ -7,9 +7,9 @@
   <header class="page-header">
     <h1>Upload export</h1>
     <p class="lede">
-      Replace the loaded archive with a fresh export ZIP from Claude.ai.
-      The new archive is parsed before anything is committed; if it's
-      malformed, the previous one stays in place. Tags persist across
+      Replace the loaded export with a fresh one from Claude.ai.
+      The new files are parsed before anything is committed; if they're
+      malformed, the previous export stays in place. Tags persist across
       uploads — see <a href="{{ url_for('viewer.orphans_view') }}">orphans</a>
       for rows that don't resolve against the new archive.
     </p>
@@ -36,12 +36,13 @@
         class="upload-form">
     <fieldset class="upload-fieldset"{% if g_inspecting %} disabled{% endif %}>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label class="upload-form-label" for="export-zip">
-        <span class="upload-form-text">Export ZIP:</span>
-        <input id="export-zip"
+      <label class="upload-form-label" for="export-files">
+        <span class="upload-form-text">Export files:</span>
+        <input id="export-files"
                type="file"
-               name="export_zip"
-               accept=".zip,application/zip"
+               name="export_files"
+               accept=".zip,.json,application/zip,application/json"
+               multiple
                required>
       </label>
       <button type="submit" class="upload-submit">Upload &amp; replace</button>
@@ -49,8 +50,9 @@
   </form>
 
   <p class="upload-hint">
-    File must be a <code>.zip</code>. Max size 200&nbsp;MB. The active
-    archive is stored at <code>cache/active_export.zip</code> and the parse
+    Files must be <code>.zip</code> archives, plus optionally the manifest
+    <code>.json</code>. Max size {{ cap_mb }}&nbsp;MB per file. The active
+    export is stored under <code>cache/active_export/</code> and the parse
     cache at <code>cache/parsed_export.pkl</code>.
   </p>
 </section>

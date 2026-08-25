@@ -125,7 +125,7 @@ def _upload(client, zip_bytes: bytes, filename: str) -> None:
     token = scrape_csrf(client)
     r = client.post(
         "/upload",
-        data={"csrf_token": token, "export_zip": (io.BytesIO(zip_bytes), filename)},
+        data={"csrf_token": token, "export_files": (io.BytesIO(zip_bytes), filename)},
         content_type="multipart/form-data",
     )
     assert r.status_code == 302

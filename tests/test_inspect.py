@@ -90,7 +90,7 @@ def _start_inspection(client, zip_bytes: bytes, filename: str = INSPECT_FILENAME
         "/inspect",
         data={
             "csrf_token": scrape_csrf(client, "/inspect"),
-            "export_zip": (io.BytesIO(zip_bytes), filename),
+            "export_files": (io.BytesIO(zip_bytes), filename),
         },
         content_type="multipart/form-data",
     )
@@ -207,7 +207,7 @@ def test_mutating_routes_refuse_and_db_is_byte_identical(
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(inspect_zip_bytes), "replacement.zip"),
+            "export_files": (io.BytesIO(inspect_zip_bytes), "replacement.zip"),
         },
         content_type="multipart/form-data",
     )
@@ -239,6 +239,35 @@ def test_inspection_leaves_no_disk_trace(app_factory, inspect_zip_bytes, tmp_pat
     for page in BROWSE_PAGES:
         client.get(page)
     client.get("/search?q=zzyzx")
+    _exit_inspection(client)
+
+    assert _snapshot(cache_dir) == before
+
+
+def test_set_inspection_leaves_no_disk_trace(app_factory, fixtures_dir: Path, tmp_path) -> None:
+    """The no-trace property extends to set inputs (v1.3.0, record §4): a
+    multi-file inspection — category zips plus the manifest — writes nothing
+    under ``cache/``."""
+    current = fixtures_dir / "current"
+    files = sorted(p for p in current.iterdir() if p.is_file())
+    client = app_factory().test_client()
+    cache_dir = tmp_path / "cache"
+
+    client.get("/")
+    before = _snapshot(cache_dir)
+    assert "viewer.sqlite" in before
+
+    r = client.post(
+        "/inspect",
+        data={
+            "csrf_token": scrape_csrf(client, "/inspect"),
+            "export_files": [(io.BytesIO(p.read_bytes()), p.name) for p in files],
+        },
+        content_type="multipart/form-data",
+    )
+    assert r.status_code == 302
+    for page in BROWSE_PAGES:
+        client.get(page)
     _exit_inspection(client)
 
     assert _snapshot(cache_dir) == before
@@ -356,12 +385,13 @@ def test_corrupt_zip_errors_and_leaves_view_untouched(
         "/inspect",
         data={
             "csrf_token": scrape_csrf(client, "/inspect"),
-            "export_zip": (io.BytesIO(corrupt), "corrupt.zip"),
+            "export_files": (io.BytesIO(corrupt), "corrupt.zip"),
         },
         content_type="multipart/form-data",
     )
     assert r.status_code == 400
-    assert "parse archive" in r.get_data(as_text=True)
+    # A malformed zip fails content detection (record §2) with the file named.
+    assert "recognised export file" in r.get_data(as_text=True)
     home = client.get("/").get_data(as_text=True)
     assert EXIT_LABEL not in home
     assert "Synthetic minimal conversation" in client.get("/conversations").get_data(as_text=True)
@@ -372,7 +402,7 @@ def test_corrupt_zip_errors_and_leaves_view_untouched(
         "/inspect",
         data={
             "csrf_token": scrape_csrf(client, "/inspect"),
-            "export_zip": (io.BytesIO(corrupt), "corrupt.zip"),
+            "export_files": (io.BytesIO(corrupt), "corrupt.zip"),
         },
         content_type="multipart/form-data",
     )

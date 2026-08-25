@@ -48,9 +48,18 @@ class InspectState:
     export: Export
     filename: str
     search_conn: sqlite3.Connection
+    # Expected-vs-supplied counts when the inspected set carried a manifest
+    # (record §4's degraded-view banner) — ``None`` otherwise.
+    manifest_status: tuple[int, int] | None = None
 
 
-def begin_inspection(app: Flask, export: Export, filename: str) -> InspectState:
+def begin_inspection(
+    app: Flask,
+    export: Export,
+    filename: str,
+    *,
+    manifest_status: tuple[int, int] | None = None,
+) -> InspectState:
     """Enter inspect mode (replacing any inspection already in progress).
 
     Builds the in-memory FTS index before touching app state, so a failure
@@ -59,7 +68,9 @@ def begin_inspection(app: Flask, export: Export, filename: str) -> InspectState:
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     index_export(conn, export)
     end_inspection(app)
-    state = InspectState(export=export, filename=filename, search_conn=conn)
+    state = InspectState(
+        export=export, filename=filename, search_conn=conn, manifest_status=manifest_status
+    )
     app.config[_CONFIG_KEY] = state
     return state
 

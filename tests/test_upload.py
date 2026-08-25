@@ -21,7 +21,7 @@ def test_upload_form_renders(app_factory) -> None:
     client = app_factory().test_client()
     body = client.get("/upload").get_data(as_text=True)
     assert 'enctype="multipart/form-data"' in body
-    assert 'name="export_zip"' in body
+    assert 'name="export_files"' in body
     assert 'name="csrf_token"' in body
 
 
@@ -49,12 +49,12 @@ def test_upload_rejects_non_zip_extension(app_factory) -> None:
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(b"not a zip"), "evil.txt"),
+            "export_files": (io.BytesIO(b"not a zip"), "evil.txt"),
         },
         content_type="multipart/form-data",
     )
     assert r.status_code == 400
-    assert "must be a .zip" in r.get_data(as_text=True)
+    assert "must be .zip archives" in r.get_data(as_text=True)
 
 
 def test_upload_rejects_malformed_zip_keeps_previous_export(app_factory) -> None:
@@ -68,16 +68,17 @@ def test_upload_rejects_malformed_zip_keeps_previous_export(app_factory) -> None
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(b"not really a zip"), "broken.zip"),
+            "export_files": (io.BytesIO(b"not really a zip"), "broken.zip"),
         },
         content_type="multipart/form-data",
     )
     assert r.status_code == 400
-    # Apostrophe is HTML-escaped by Jinja, so match a fragment that survives.
-    assert "parse archive" in r.get_data(as_text=True)
+    # A malformed zip fails content detection (record §2) with the file named.
+    assert "recognised export file" in r.get_data(as_text=True)
     # Active export must NOT have changed.
     assert flask_app.config["EXPORT"] is before_export
-    # And no zip should have been written into place.
+    # And nothing should have been written into place.
+    assert not flask_app.config["ACTIVE_SET_PATH"].exists()
     assert not flask_app.config["ACTIVE_ZIP_PATH"].exists()
 
 
@@ -98,16 +99,17 @@ def test_upload_happy_path_replaces_export(app_factory, fixtures_dir: Path) -> N
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
+            "export_files": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
         },
         content_type="multipart/form-data",
     )
     assert r.status_code == 302
     assert r.headers["Location"].endswith("/")
 
-    # Active export now reflects the uploaded archive.
+    # Active export now reflects the uploaded archive, stored as a set of
+    # one in the set directory (v1.3.0, record §5).
     assert len(flask_app.config["EXPORT"].orphan_project_memories) >= 1
-    assert flask_app.config["ACTIVE_ZIP_PATH"].is_file()
+    assert (flask_app.config["ACTIVE_SET_PATH"] / "uploaded.zip").is_file()
 
 
 def test_upload_invalidates_parse_cache(app_factory, fixtures_dir: Path) -> None:
@@ -126,7 +128,7 @@ def test_upload_invalidates_parse_cache(app_factory, fixtures_dir: Path) -> None
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
+            "export_files": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
         },
         content_type="multipart/form-data",
     )
@@ -150,7 +152,7 @@ def test_upload_rebuilds_search_index(app_factory, fixtures_dir: Path) -> None:
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
+            "export_files": (io.BytesIO(new_zip_bytes), "uploaded.zip"),
         },
         content_type="multipart/form-data",
     )

@@ -580,8 +580,20 @@ format (manifest + four category zips replacing the single zip) and the memory s
   files, login events, `Export.categories`; `user`/`global_memory` now optional for
   subset loads) with the deliberate signature drop test-pinned end to end, dual-format
   parametrisation of nine test families, and the aggregate-only real-data skip test
-  (`data/export-2026-08/`, Session R confirm-table counts — passing). Phases 3–4
-  (upload/storage, rendering/copy) follow under the same brief.
+  (`data/export-2026-08/`, Session R confirm-table counts — passing). Phase 3 shipped
+  *(provisional where the record marks the upload shape provisional — operator testing
+  still gates it)*: multi-file upload and inspect (one picker for category zips plus the
+  optional manifest, content sniff-and-slot, duplicate-category last-wins with a logged
+  warning, atomic stage-parse-swap generalised to sets); set storage under
+  `cache/active_export/` with the pre-set `active_export.zip` still picked up by
+  tolerance; the set fingerprint keying parse cache, history rows, and startup dedup
+  (set-of-one digests continuous with pre-set rows — test-verified against a
+  pre-existing history row); the `VIEWER_MAX_UPLOAD_MB` per-file cap knob (default 200,
+  both enforcement sides, stale comment corrected); the degraded-view banner with the
+  Appendix C1 copy byte-exact, manifest expected-vs-supplied included, following the
+  viewed export (inspected subsets included); inspect no-trace extended to sets; and
+  real-rendered-form tests for both pickers. Phase 4 (rendering and copy) follows under
+  the same brief.
 
 ### Later (unscheduled, non-blocking)
 

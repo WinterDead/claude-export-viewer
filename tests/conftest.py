@@ -90,6 +90,7 @@ def app_factory(tmp_path: Path, fixtures_dir: Path, monkeypatch):
 
         cache_dir = tmp_path / "cache"
         monkeypatch.setattr(app_module, "CACHE_DIR", cache_dir)
+        monkeypatch.setattr(app_module, "ACTIVE_SET", cache_dir / "active_export")
         monkeypatch.setattr(app_module, "ACTIVE_ZIP", cache_dir / "active_export.zip")
         monkeypatch.setattr(app_module, "PARSE_CACHE", cache_dir / "parsed_export.pkl")
         monkeypatch.setattr(app_module, "REAL_EXPORT", tmp_path / "data" / "data.zip")
@@ -98,6 +99,7 @@ def app_factory(tmp_path: Path, fixtures_dir: Path, monkeypatch):
             fixtures_dir / initial_fixture,
             db_path=cache_dir / "viewer.sqlite",
         )
+        flask_app.config["ACTIVE_SET_PATH"] = app_module.ACTIVE_SET
         flask_app.config["ACTIVE_ZIP_PATH"] = app_module.ACTIVE_ZIP
         flask_app.config["PARSE_CACHE_PATH"] = app_module.PARSE_CACHE
         return flask_app

@@ -830,7 +830,7 @@ def _start_inspection(client, zip_bytes: bytes) -> None:
         "/inspect",
         data={
             "csrf_token": scrape_csrf(client, "/inspect"),
-            "export_zip": (io.BytesIO(zip_bytes), "other_export.zip"),
+            "export_files": (io.BytesIO(zip_bytes), "other_export.zip"),
         },
         content_type="multipart/form-data",
     )

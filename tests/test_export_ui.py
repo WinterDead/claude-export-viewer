@@ -151,7 +151,7 @@ def _start_inspection(client, export_path: Path) -> None:
     zip_bytes = export_path.read_bytes()
     r = client.post(
         "/inspect",
-        data={"csrf_token": token, "export_zip": (io.BytesIO(zip_bytes), "other.zip")},
+        data={"csrf_token": token, "export_files": (io.BytesIO(zip_bytes), "other.zip")},
         content_type="multipart/form-data",
     )
     assert r.status_code == 302

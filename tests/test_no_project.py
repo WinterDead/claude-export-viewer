@@ -345,7 +345,7 @@ def test_sentinel_tag_survives_reimport(app_factory, fixtures_dir) -> None:
         "/upload",
         data={
             "csrf_token": scrape_csrf(client),
-            "export_zip": (io.BytesIO(new_zip), "reimport.zip"),
+            "export_files": (io.BytesIO(new_zip), "reimport.zip"),
         },
         content_type="multipart/form-data",
     )

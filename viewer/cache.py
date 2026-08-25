@@ -1,17 +1,18 @@
-"""Pickle-based parse cache (plan §12 step 7).
+"""Pickle-based parse cache (plan §12 step 7; set-aware since v1.3.0).
 
-Parsing the real-export ZIP is ~165 ms; trivial in absolute terms but it
-dominates app start. The cache is a pickled :class:`viewer.parser.Export`
-keyed by ``(zip_sha256, parser_module_sha256)``:
+Parsing the real-export archive is fast in absolute terms but dominates app
+start. The cache is a pickled :class:`viewer.parser.Export` keyed by
+``(set_fingerprint, parser_module_sha256)``:
 
-- ``zip_sha256`` — SHA256 over the zip bytes. Cheap (~ms), immune to mtime
-  weirdness on Windows.
+- ``set_fingerprint`` — the plain SHA256 of the file for a set of one
+  (continuous with the pre-set single-zip digests), the SHA256 over the
+  sorted per-file digests for a set of many (design record §5).
 - ``parser_module_sha256`` — SHA256 of ``viewer/parser.py`` source. Simplest
   invalidation that catches parser-shape changes; doesn't try to track
   every module the parser depends on, since rebuild is cheap.
 
 On cache miss (or hash mismatch), parse normally and re-pickle. Pickle file
-format: a dict ``{"key": (zip_hash, parser_hash), "export": Export}``. No
+format: a dict ``{"key": (fingerprint, parser_hash), "export": Export}``. No
 schema versioning beyond the parser hash — if the dataclass shape changes,
 the parser hash changes too.
 """
@@ -21,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import pickle
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -53,18 +55,45 @@ def zip_hash(zip_path: Path) -> str:
     return _sha256_file(zip_path)
 
 
-def load_or_build(zip_path: Path, pickle_path: Path, *, zip_sha256: str | None = None) -> Export:
-    """Return the parsed ``Export`` for ``zip_path``, using the on-disk
-    pickle cache when its key matches, otherwise re-parsing and rewriting.
+def set_fingerprint(paths: Sequence[Path]) -> str:
+    """Fingerprint of a supplied set of files (design record §5).
 
-    ``zip_sha256`` lets a caller that has already hashed the zip (e.g. to
-    record the upload-history row) share the digest instead of hashing the
-    file a second time.
+    A set of one keeps the plain SHA256 of the file, so existing history
+    rows and startup dedup stay continuous with pre-set single-zip digests.
+    A set of many hashes the *sorted* per-file digests, making the
+    fingerprint independent of supply order.
+    """
+    digests = sorted(_sha256_file(p) for p in paths)
+    if len(digests) == 1:
+        return digests[0]
+    h = hashlib.sha256()
+    for d in digests:
+        h.update(d.encode("ascii"))
+    return h.hexdigest()
+
+
+def source_fingerprint(source: Path) -> str:
+    """The cache-key fingerprint for a source — a single archive's hash, or
+    the set fingerprint over every file in a set directory (the manifest,
+    stored as received, is part of the set identity)."""
+    if source.is_dir():
+        return set_fingerprint(sorted(p for p in source.iterdir() if p.is_file()))
+    return zip_hash(source)
+
+
+def load_or_build(source: Path, pickle_path: Path, *, fingerprint: str | None = None) -> Export:
+    """Return the parsed ``Export`` for ``source`` (a single archive or a
+    set directory), using the on-disk pickle cache when its key matches,
+    otherwise re-parsing and rewriting.
+
+    ``fingerprint`` lets a caller that has already fingerprinted the source
+    (e.g. to record the upload-history row) share the digest instead of
+    hashing the files a second time.
 
     The pickle file is written atomically via a tempfile-rename to avoid
     leaving a half-written cache on a process kill mid-write.
     """
-    expected_key = (zip_sha256 or zip_hash(zip_path), parser_module_hash())
+    expected_key = (fingerprint or source_fingerprint(source), parser_module_hash())
 
     if pickle_path.is_file():
         try:
@@ -77,7 +106,7 @@ def load_or_build(zip_path: Path, pickle_path: Path, *, zip_sha256: str | None =
         except (pickle.UnpicklingError, EOFError, AttributeError, ImportError) as e:
             logger.warning("parse cache: unreadable (%s) — re-parsing", e)
 
-    export = load_export(zip_path)
+    export = load_export(source)
     write_cache(pickle_path, expected_key, export)
     return export
 

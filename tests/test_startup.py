@@ -50,13 +50,16 @@ def startup_env(
     cache_dir.mkdir()
     data_dir = tmp_path / "data"
     data_dir.mkdir()
+    active_set = cache_dir / "active_export"
     active = cache_dir / "active_export.zip"
     dev_copy = data_dir / "data.zip"
     monkeypatch.setattr(app_module, "CACHE_DIR", cache_dir)
+    monkeypatch.setattr(app_module, "ACTIVE_SET", active_set)
     monkeypatch.setattr(app_module, "ACTIVE_ZIP", active)
     monkeypatch.setattr(app_module, "PARSE_CACHE", cache_dir / "parsed_export.pkl")
     monkeypatch.setattr(app_module, "REAL_EXPORT", dev_copy)
     return SimpleNamespace(
+        active_set=active_set,
         active=active,
         dev_copy=dev_copy,
         db_path=tmp_path / "viewer.sqlite",
@@ -151,15 +154,17 @@ def test_successful_upload_clears_banner_and_replaces_file(startup_env) -> None:
         "/upload",
         data={
             "csrf_token": token,
-            "export_zip": (io.BytesIO(startup_env.good_bytes), "replacement.zip"),
+            "export_files": (io.BytesIO(startup_env.good_bytes), "replacement.zip"),
         },
         content_type="multipart/form-data",
     )
     assert r.status_code == 302
 
-    # New export loaded, stored file replaced, banner gone.
+    # New export loaded into the set directory (v1.3.0, record §5), the
+    # unparseable pre-set zip retired, banner gone.
     assert flask_app.config["STORED_EXPORT_FAILED"] is False
-    assert startup_env.active.read_bytes() == startup_env.good_bytes
+    assert (startup_env.active_set / "replacement.zip").read_bytes() == startup_env.good_bytes
+    assert not startup_env.active.exists()
     assert _banner_text(client.get("/").get_data(as_text=True)) is None
 
 

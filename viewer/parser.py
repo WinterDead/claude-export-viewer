@@ -388,6 +388,41 @@ def load_export_from_bytes(data: bytes, *, name: str) -> Export:
     return _parse_zip(zf_ctx, source_name=name)
 
 
+def load_export_from_bytes_set(files: Sequence[tuple[str, bytes]]) -> Export:
+    """Parse a set of export archives held entirely in memory.
+
+    The multi-file sibling of :func:`load_export_from_bytes` — the inspect
+    flow's set input (record §4), honouring the same no-trace rule: nothing
+    touches disk. ``files`` holds ``(display_name, zip_bytes)`` pairs in
+    supplied order; the same detection dispatch as :func:`load_export`
+    applies, mixing refused included.
+    """
+    if not files:
+        raise ExportFormatError("no files supplied")
+    parts: list[tuple[str | None, zipfile.ZipFile, str]] = []
+    for name, data in files:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(data))
+        except zipfile.BadZipFile as e:
+            raise ExportFormatError(f"not a valid zip archive: {name} ({e})") from e
+        parts.append((sniff_container(set(zf.namelist())), zf, name))
+
+    if any(kind in ALL_CATEGORIES for kind, _zf, _name in parts):
+        others = [name for kind, _zf, name in parts if kind not in ALL_CATEGORIES]
+        if others:
+            raise ExportFormatError(
+                "cannot mix current-format category archives with other archives "
+                f"in one load: {', '.join(others)}"
+            )
+        return _load_current_set([(kind, zf, name, name) for kind, zf, name in parts])
+
+    if len(parts) == 1:
+        _kind, zf, name = parts[0]
+        _warn_if_isolated_batch(name)
+        return _parse_zip(zf, source_name=name)
+    return _merge_batches([_parse_zip(zf, source_name=name) for _kind, zf, name in parts])
+
+
 # ---------------------------------------------------------------------------
 # Path resolution.
 # ---------------------------------------------------------------------------
@@ -450,6 +485,19 @@ def sniff_manifest(data: bytes) -> bool:
     except (ValueError, UnicodeDecodeError):
         return False
     return isinstance(parsed, dict) and "data_files" in parsed
+
+
+def manifest_file_count(data: bytes) -> int | None:
+    """How many data files a manifest lists, or ``None`` when ``data`` is
+    not a manifest — the expected-vs-supplied banner's ``{m}`` (record §4)."""
+    try:
+        parsed = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    data_files = parsed.get("data_files")
+    return len(data_files) if isinstance(data_files, list) else None
 
 
 def _open_zip(path: Path) -> tuple[zipfile.ZipFile, set[str]]:

@@ -24,19 +24,21 @@
         enctype="multipart/form-data"
         class="upload-form inspect-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label class="upload-form-label" for="inspect-zip">
-      <span class="upload-form-text">Export ZIP:</span>
-      <input id="inspect-zip"
+    <label class="upload-form-label" for="inspect-files">
+      <span class="upload-form-text">Export files:</span>
+      <input id="inspect-files"
              type="file"
-             name="export_zip"
-             accept=".zip,application/zip"
+             name="export_files"
+             accept=".zip,.json,application/zip,application/json"
+             multiple
              required>
     </label>
     <button type="submit" class="upload-submit">Inspect</button>
   </form>
 
   <p class="upload-hint">
-    File must be a <code>.zip</code>. Max size 200&nbsp;MB. The file is
+    Files must be <code>.zip</code> archives, plus optionally the manifest
+    <code>.json</code>. Max size {{ cap_mb }}&nbsp;MB per file. The files are
     parsed in memory and never written to disk.
   </p>
 </section>
