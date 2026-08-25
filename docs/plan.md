@@ -477,6 +477,16 @@ series keeps its role under the name "1.3.x". No version bump until the arc's cl
     marked (both) / (legacy only) / (current only); all examples synthetic.
   - Open design questions recorded verbatim in the Phase 1 report for the chat design
     record; design work deliberately out of session scope.
+- **Session R, Phase 2** *(shipped)* — read-only codebase review (report:
+  `docs/briefs/v1.3.0-session-r-phase2-report.md`). No application code changed. Ranked
+  findings feed the arc's implementation briefs; headlines: the parse→model seam is clean
+  (all consumers are container-agnostic via `Export`; the leaks concentrate in
+  `_parse_zip`, upload/inspect routes, and single-zip cache/history fingerprinting);
+  theming is substantially ready (7 root tokens, 162 `var()` uses, zero inline/JS colours;
+  ~66 hardcoded declarations, a dark highlight.js theme, and a print token reset are the
+  work); the test suite needs conftest consolidation + a parametrisable export fixture
+  before dual-format fixtures land; runtime dependency closure audits clean; README/help
+  claims the new format invalidates are enumerated for the close session.
 
 ## Roadmap (post-v1.1)
 
@@ -546,8 +556,10 @@ format (manifest + four category zips replacing the single zip) and the memory s
   the design record and operator testing.)**
 - Dark mode.
 - Dev docs excluded from the default GitHub download via `export-ignore` (streamlined
-  download, files remain browsable; no separate branch or repo). *(shipped ahead of the
-  arc — commit "Exclude development briefs from generated archives")*
+  download, files remain browsable; no separate branch or repo). *(briefs shipped ahead
+  of the arc — commit "Exclude development briefs from generated archives" covers
+  `docs/briefs/**` only; whether the remaining dev docs join the exclusion is an operator
+  decision for the arc — Session R Phase 2 close-out.)*
 - The codebase review (Session R Phase 2) feeding the arc's implementation briefs.
 
 ### Later (unscheduled, non-blocking)
