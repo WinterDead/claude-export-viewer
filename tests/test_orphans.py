@@ -13,31 +13,13 @@ Covers:
 
 from __future__ import annotations
 
-from pathlib import Path
-
-import pytest
-
-from app import create_app
+from tests.conftest import scrape_csrf
 from viewer.tagging import all_tags, set_tag
 
 _CONV_1 = "00000000-0000-0000-0000-0000000000c1"  # in synthetic export
 _PROJ_A = "00000000-0000-0000-0000-0000000000a1"  # in synthetic export
 _GHOST_CONV = "00000000-0000-0000-0000-0000000ghost"
 _GHOST_PROJ = "00000000-0000-0000-0000-0000000gh0st"
-
-
-@pytest.fixture
-def app(tmp_path: Path, fixtures_dir: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app
-
-
-@pytest.fixture
-def client(app):
-    return app.test_client()
 
 
 def _seed(app, **rows):
@@ -48,16 +30,6 @@ def _seed(app, **rows):
         db = get_db()
         for cuid, puid in rows.items():
             set_tag(db, cuid, puid)
-
-
-def _csrf_token(client) -> str:
-    """Pull a CSRF token by GETting any page that renders the upload form."""
-    body = client.get("/upload").get_data(as_text=True)
-    import re
-
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m, "couldn't extract CSRF token from /upload"
-    return m.group(1)
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +107,7 @@ def test_conv_detail_no_orphan_option_for_live_tag(app, client) -> None:
 
 def test_purge_rejects_without_confirm(app, client) -> None:
     _seed(app, **{_GHOST_CONV: _PROJ_A})
-    token = _csrf_token(client)
+    token = scrape_csrf(client)
     r = client.post("/orphans/purge", data={"csrf_token": token})
     assert r.status_code == 400
     # Tag rows must be untouched.
@@ -154,7 +126,7 @@ def test_purge_with_confirm_deletes_orphans_only(app, client) -> None:
             "00000000-0000-0000-0000-0000000000d1": _GHOST_PROJ,  # orphan-project — gone
         },
     )
-    token = _csrf_token(client)
+    token = scrape_csrf(client)
     r = client.post("/orphans/purge", data={"csrf_token": token, "confirm": "yes"})
     assert r.status_code == 302
     assert "/orphans" in r.headers["Location"]
@@ -170,7 +142,7 @@ def test_purge_no_op_when_no_orphans(app, client) -> None:
     """Purge should be safe to call when nothing's orphaned — useful if the
     user double-submits or the view is stale."""
     _seed(app, **{_CONV_1: _PROJ_A})
-    token = _csrf_token(client)
+    token = scrape_csrf(client)
     r = client.post("/orphans/purge", data={"csrf_token": token, "confirm": "yes"})
     assert r.status_code == 302
     with app.app_context():

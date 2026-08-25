@@ -28,11 +28,6 @@ from viewer.parser import (
 )
 
 
-@pytest.fixture
-def export(fixtures_dir: Path) -> Export:
-    return load_export(fixtures_dir / "synthetic_export.zip")
-
-
 def test_export_top_level_shape(export: Export) -> None:
     assert isinstance(export, Export)
     assert export.user.uuid == "00000000-0000-0000-0000-000000000001"

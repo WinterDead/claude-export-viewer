@@ -9,8 +9,6 @@ from __future__ import annotations
 import pickle
 from pathlib import Path
 
-import pytest
-
 from viewer.cache import (
     invalidate,
     load_or_build,
@@ -21,23 +19,18 @@ from viewer.cache import (
 from viewer.parser import Export, load_export
 
 
-@pytest.fixture
-def synthetic_zip(fixtures_dir: Path) -> Path:
-    return fixtures_dir / "synthetic_export.zip"
-
-
-def test_first_call_builds_cache(tmp_path: Path, synthetic_zip: Path) -> None:
+def test_first_call_builds_cache(tmp_path: Path, export_path: Path) -> None:
     pkl = tmp_path / "parsed.pkl"
     assert not pkl.exists()
-    export = load_or_build(synthetic_zip, pkl)
+    export = load_or_build(export_path, pkl)
     assert isinstance(export, Export)
     assert pkl.is_file()
 
 
-def test_second_call_hits_cache(tmp_path: Path, synthetic_zip: Path, monkeypatch) -> None:
+def test_second_call_hits_cache(tmp_path: Path, export_path: Path, monkeypatch) -> None:
     """If the key matches, ``load_export`` should NOT be called the second time."""
     pkl = tmp_path / "parsed.pkl"
-    load_or_build(synthetic_zip, pkl)
+    load_or_build(export_path, pkl)
 
     sentinel: list[int] = []
 
@@ -46,17 +39,17 @@ def test_second_call_hits_cache(tmp_path: Path, synthetic_zip: Path, monkeypatch
         raise AssertionError("load_export must not be called on cache hit")
 
     monkeypatch.setattr("viewer.cache.load_export", boom)
-    export = load_or_build(synthetic_zip, pkl)
+    export = load_or_build(export_path, pkl)
     assert isinstance(export, Export)
     assert sentinel == []
 
 
 def test_key_mismatch_zip_changed_rebuilds(
-    tmp_path: Path, synthetic_zip: Path, fixtures_dir: Path
+    tmp_path: Path, export_path: Path, fixtures_dir: Path
 ) -> None:
     """Pointing at a different zip with the same pickle path triggers a rebuild."""
     pkl = tmp_path / "parsed.pkl"
-    load_or_build(synthetic_zip, pkl)
+    load_or_build(export_path, pkl)
 
     other_zip = fixtures_dir / "bad_dangling_memory.zip"
     export = load_or_build(other_zip, pkl)
@@ -65,11 +58,11 @@ def test_key_mismatch_zip_changed_rebuilds(
 
 
 def test_key_mismatch_parser_hash_invalidates(
-    tmp_path: Path, synthetic_zip: Path, monkeypatch
+    tmp_path: Path, export_path: Path, monkeypatch
 ) -> None:
     """If the parser-module hash changes, the cache is rebuilt."""
     pkl = tmp_path / "parsed.pkl"
-    load_or_build(synthetic_zip, pkl)
+    load_or_build(export_path, pkl)
 
     monkeypatch.setattr("viewer.cache.parser_module_hash", lambda: "f" * 64)
 
@@ -81,14 +74,14 @@ def test_key_mismatch_parser_hash_invalidates(
         return real_load(*a, **kw)
 
     monkeypatch.setattr("viewer.cache.load_export", tracking_load)
-    load_or_build(synthetic_zip, pkl)
+    load_or_build(export_path, pkl)
     assert rebuilt == [1]
 
 
-def test_corrupted_pickle_falls_back_to_parse(tmp_path: Path, synthetic_zip: Path) -> None:
+def test_corrupted_pickle_falls_back_to_parse(tmp_path: Path, export_path: Path) -> None:
     pkl = tmp_path / "parsed.pkl"
     pkl.write_bytes(b"not a pickle, not even close")
-    export = load_or_build(synthetic_zip, pkl)
+    export = load_or_build(export_path, pkl)
     assert isinstance(export, Export)
     # And the cache was rewritten with the valid blob.
     with pkl.open("rb") as f:
@@ -97,10 +90,10 @@ def test_corrupted_pickle_falls_back_to_parse(tmp_path: Path, synthetic_zip: Pat
     assert "export" in blob
 
 
-def test_write_is_atomic_no_tmp_left_behind(tmp_path: Path, synthetic_zip: Path) -> None:
+def test_write_is_atomic_no_tmp_left_behind(tmp_path: Path, export_path: Path) -> None:
     pkl = tmp_path / "parsed.pkl"
-    export = load_export(synthetic_zip)
-    key = (zip_hash(synthetic_zip), parser_module_hash())
+    export = load_export(export_path)
+    key = (zip_hash(export_path), parser_module_hash())
     write_cache(pkl, key, export)
     leftovers = list(tmp_path.glob("*.tmp"))
     assert leftovers == []
@@ -116,9 +109,9 @@ def test_invalidate_removes_file_idempotent(tmp_path: Path) -> None:
     invalidate(pkl)
 
 
-def test_zip_hash_stable_across_calls(synthetic_zip: Path) -> None:
-    a = zip_hash(synthetic_zip)
-    b = zip_hash(synthetic_zip)
+def test_zip_hash_stable_across_calls(export_path: Path) -> None:
+    a = zip_hash(export_path)
+    b = zip_hash(export_path)
     assert a == b
     assert len(a) == 64  # SHA256 hex
 

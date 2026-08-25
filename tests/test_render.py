@@ -15,7 +15,6 @@ from viewer.parser import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
-    load_export,
 )
 from viewer.render import (
     block_type,
@@ -479,51 +478,50 @@ _F4 = "00000000-0000-0000-0000-0000000000f4"
 _F5 = "00000000-0000-0000-0000-0000000000f5"
 
 
-def _branching_conv(fixtures_dir):
-    export = load_export(fixtures_dir / "synthetic_export.zip")
+def _branching_conv(export):
     return next(c for c in export.conversations if "branching" in c.title.lower())
 
 
-def test_render_path_no_overrides_returns_canonical(fixtures_dir) -> None:
-    conv = _branching_conv(fixtures_dir)
+def test_render_path_no_overrides_returns_canonical(export) -> None:
+    conv = _branching_conv(export)
     path, ignored = compute_render_path(conv, [])
     assert path == [_F2, _F3, _F5]
     assert ignored == []
 
 
-def test_render_path_override_to_non_canonical_sibling(fixtures_dir) -> None:
-    conv = _branching_conv(fixtures_dir)
+def test_render_path_override_to_non_canonical_sibling(export) -> None:
+    conv = _branching_conv(export)
     path, ignored = compute_render_path(conv, [_F4])
     # f4 has no children, so the path stops there.
     assert path == [_F2, _F4]
     assert ignored == []
 
 
-def test_render_path_override_to_canonical_sibling_is_no_op(fixtures_dir) -> None:
-    conv = _branching_conv(fixtures_dir)
+def test_render_path_override_to_canonical_sibling_is_no_op(export) -> None:
+    conv = _branching_conv(export)
     path, ignored = compute_render_path(conv, [_F3])
     # f3 IS the canonical child at f2; redundant override but harmless.
     assert path == [_F2, _F3, _F5]
     assert ignored == []  # f3 was a child of f2 → consumed
 
 
-def test_render_path_unknown_override_is_ignored(fixtures_dir) -> None:
-    conv = _branching_conv(fixtures_dir)
+def test_render_path_unknown_override_is_ignored(export) -> None:
+    conv = _branching_conv(export)
     bogus = "00000000-0000-0000-0000-000000000bad"
     path, ignored = compute_render_path(conv, [bogus])
     assert path == [_F2, _F3, _F5]
     assert ignored == [bogus]
 
 
-def test_render_path_mixed_known_and_unknown_overrides(fixtures_dir) -> None:
-    conv = _branching_conv(fixtures_dir)
+def test_render_path_mixed_known_and_unknown_overrides(export) -> None:
+    conv = _branching_conv(export)
     bogus = "00000000-0000-0000-0000-000000000bad"
     path, ignored = compute_render_path(conv, [_F4, bogus])
     assert path == [_F2, _F4]
     assert ignored == [bogus]
 
 
-def test_render_path_empty_canonical_returns_empty(fixtures_dir) -> None:
+def test_render_path_empty_canonical_returns_empty() -> None:
     """A conversation whose canonical_path is empty returns no path even with overrides."""
     conv = _make_conv()  # zero messages → empty canonical_path
     path, ignored = compute_render_path(conv, ["x"])

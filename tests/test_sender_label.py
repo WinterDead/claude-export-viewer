@@ -13,11 +13,7 @@ below as exactly that control.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-import pytest
-
-from app import create_app
 from viewer.render import sender_label
 
 # Conversations in tests/fixtures/synthetic_export.zip.
@@ -28,15 +24,6 @@ CONV_BRANCHED = "00000000-0000-0000-0000-0000000000f1"
 MSG_SENDER_RE = re.compile(r'<span class="msg-sender">([^<]*)</span>')
 SEARCH_SENDER_RE = re.compile(r'<span class="search-message-sender">([^<]*)</span>')
 BRANCH_OPTION_RE = re.compile(r'class="branch-option[^"]*"[^>]*>\s*\d+\.\s*([A-Za-z]+)')
-
-
-@pytest.fixture
-def synthetic_client(tmp_path: Path, fixtures_dir: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
 
 
 # ---------------------------------------------------------------------------
@@ -65,18 +52,18 @@ def test_sender_label_empty_input() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_detail_page_shows_user_label_on_human_message(synthetic_client) -> None:
-    body = synthetic_client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
+def test_detail_page_shows_user_label_on_human_message(client) -> None:
+    body = client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
     labels = MSG_SENDER_RE.findall(body)
     assert labels, "expected at least one sender-label element"
     assert "User" in [lab.strip() for lab in labels]
     assert "Assistant" in [lab.strip() for lab in labels]
 
 
-def test_detail_page_sender_label_never_says_human(synthetic_client) -> None:
+def test_detail_page_sender_label_never_says_human(client) -> None:
     # The minimal conversation's first message body is "hello from human" —
     # the *content* may say "human"; the label element must not.
-    body = synthetic_client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
+    body = client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
     assert "hello from human" in body  # control: content keeps the word
     for label in MSG_SENDER_RE.findall(body):
         assert "human" not in label.lower()
@@ -87,8 +74,8 @@ def test_detail_page_sender_label_never_says_human(synthetic_client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_branch_switcher_options_use_display_labels(synthetic_client) -> None:
-    body = synthetic_client.get(f"/conversations/{CONV_BRANCHED}").get_data(as_text=True)
+def test_branch_switcher_options_use_display_labels(client) -> None:
+    body = client.get(f"/conversations/{CONV_BRANCHED}").get_data(as_text=True)
     options = BRANCH_OPTION_RE.findall(body)
     assert options, "expected branch-switcher options on the branched conversation"
     for word in options:
@@ -101,8 +88,8 @@ def test_branch_switcher_options_use_display_labels(synthetic_client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_search_hit_sender_label_is_user(synthetic_client) -> None:
-    body = synthetic_client.get('/search?q="hello from human"').get_data(as_text=True)
+def test_search_hit_sender_label_is_user(client) -> None:
+    body = client.get('/search?q="hello from human"').get_data(as_text=True)
     labels = SEARCH_SENDER_RE.findall(body)
     assert labels, "expected a message hit with a sender label"
     for label in labels:

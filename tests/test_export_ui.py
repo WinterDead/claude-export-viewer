@@ -15,9 +15,8 @@ from pathlib import Path
 
 import pytest
 
-from app import create_app
+from tests.conftest import scrape_csrf
 from viewer.export import serialise_conversation
-from viewer.parser import load_export
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
@@ -25,15 +24,6 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 CONV_MINIMAL = "00000000-0000-0000-0000-0000000000c1"
 CONV_BRANCHING = "00000000-0000-0000-0000-0000000000f1"
 BRANCH_B = "00000000-0000-0000-0000-0000000000f4"
-
-
-@pytest.fixture
-def client(fixtures_dir: Path, tmp_path: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
 
 
 def _detail_page(client, uuid: str = CONV_MINIMAL, query: str = "") -> str:
@@ -118,8 +108,7 @@ def test_frontmatter_present_by_default(client) -> None:
     assert doc.startswith("---\n")
 
 
-def test_serialiser_frontmatter_default_is_on(fixtures_dir: Path) -> None:
-    export = load_export(fixtures_dir / "synthetic_export.zip")
+def test_serialiser_frontmatter_default_is_on(export) -> None:
     conv = next(c for c in export.conversations if c.uuid == CONV_MINIMAL)
     assert serialise_conversation(conv, conv.canonical_path).startswith("---\n")
     no_fm = serialise_conversation(conv, conv.canonical_path, include_frontmatter=False)
@@ -157,10 +146,9 @@ def test_list_bar_carries_export_action_with_defaults(client) -> None:
     assert "Untag selected" in page
 
 
-def _start_inspection(client, fixtures_dir: Path) -> None:
-    body = client.get("/inspect").get_data(as_text=True)
-    token = re.search(r'name="csrf_token" value="([^"]+)"', body).group(1)
-    zip_bytes = (fixtures_dir / "synthetic_export.zip").read_bytes()
+def _start_inspection(client, export_path: Path) -> None:
+    token = scrape_csrf(client, "/inspect")
+    zip_bytes = export_path.read_bytes()
     r = client.post(
         "/inspect",
         data={"csrf_token": token, "export_zip": (io.BytesIO(zip_bytes), "other.zip")},
@@ -169,11 +157,11 @@ def _start_inspection(client, fixtures_dir: Path) -> None:
     assert r.status_code == 302
 
 
-def test_inspect_mode_bar_carries_only_export(client, fixtures_dir: Path) -> None:
+def test_inspect_mode_bar_carries_only_export(client, export_path: Path) -> None:
     """The action bar APPEARS in inspect mode (exporting from an inspected
     archive is a primary use case) carrying only the export action — every
     tagging control stays structurally absent."""
-    _start_inspection(client, fixtures_dir)
+    _start_inspection(client, export_path)
     page = _list_page(client)
     assert 'id="bulk-form"' in page
     assert "Export selected" in page
@@ -187,8 +175,8 @@ def test_inspect_mode_bar_carries_only_export(client, fixtures_dir: Path) -> Non
     assert "tag-filter" not in page  # Session K isolation unchanged
 
 
-def test_bulk_export_from_inspect_mode_bar_posts_successfully(client, fixtures_dir: Path) -> None:
-    _start_inspection(client, fixtures_dir)
+def test_bulk_export_from_inspect_mode_bar_posts_successfully(client, export_path: Path) -> None:
+    _start_inspection(client, export_path)
     body = client.get("/conversations").get_data(as_text=True)
     token = re.search(r'name="csrf_token" value="([^"]+)"', body).group(1)
     r = client.post(

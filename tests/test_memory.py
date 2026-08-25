@@ -27,15 +27,6 @@ from app import create_app
 
 
 @pytest.fixture
-def synthetic_client(tmp_path: Path, fixtures_dir: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
-
-
-@pytest.fixture
 def dangling_client(tmp_path: Path, fixtures_dir: Path):
     app = create_app(
         fixtures_dir / "bad_dangling_memory.zip",
@@ -49,8 +40,8 @@ def dangling_client(tmp_path: Path, fixtures_dir: Path):
 # ---------------------------------------------------------------------------
 
 
-def test_memory_view_renders_global_and_project_memory(synthetic_client) -> None:
-    r = synthetic_client.get("/memory")
+def test_memory_view_renders_global_and_project_memory(client) -> None:
+    r = client.get("/memory")
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert "Global memory" in body
@@ -60,8 +51,8 @@ def test_memory_view_renders_global_and_project_memory(synthetic_client) -> None
     assert "Synthetic Starter Project B" not in body
 
 
-def test_memory_view_omits_orphan_section_when_none(synthetic_client) -> None:
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+def test_memory_view_omits_orphan_section_when_none(client) -> None:
+    body = client.get("/memory").get_data(as_text=True)
     assert "Orphan memories" not in body
 
 
@@ -82,10 +73,10 @@ def test_memory_view_renders_orphan_section_when_present(dangling_client) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_each_memory_is_pre_collapsed_details(synthetic_client) -> None:
+def test_each_memory_is_pre_collapsed_details(client) -> None:
     """Every memory block is wrapped in <details> with no ``open`` attribute,
     so the user lands on a compact list and clicks to expand."""
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+    body = client.get("/memory").get_data(as_text=True)
     # Find the global memory's details element.
     m = re.search(
         r'<details class="memory-block memory-block-global"[^>]*id="global-memory"[^>]*>',
@@ -104,9 +95,9 @@ def test_each_memory_is_pre_collapsed_details(synthetic_client) -> None:
     assert " open" not in m.group(0)
 
 
-def test_internal_sections_are_open_by_default(synthetic_client) -> None:
+def test_internal_sections_are_open_by_default(client) -> None:
     """Inside an expanded memory, section <details> are pre-opened."""
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+    body = client.get("/memory").get_data(as_text=True)
     section_match = re.search(
         r'<details class="memory-section" open[^>]*>',
         body,
@@ -114,19 +105,19 @@ def test_internal_sections_are_open_by_default(synthetic_client) -> None:
     assert section_match
 
 
-def test_expand_collapse_toggle_present_when_sections_detected(synthetic_client) -> None:
+def test_expand_collapse_toggle_present_when_sections_detected(client) -> None:
     """Synthetic global memory has a ``**Work context**`` heading → toggle
     bar appears."""
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+    body = client.get("/memory").get_data(as_text=True)
     assert 'class="memory-section-toggle"' in body
     assert 'data-action="expand"' in body
     assert 'data-action="collapse"' in body
 
 
-def test_section_anchor_ids_use_slug_format(synthetic_client) -> None:
+def test_section_anchor_ids_use_slug_format(client) -> None:
     """Section-level IDs follow ``<memory-anchor>--<slug>`` so JS can walk
     the DOM and any future search hit at section level resolves."""
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+    body = client.get("/memory").get_data(as_text=True)
     assert 'id="global-memory--work-context"' in body
 
 
@@ -135,30 +126,30 @@ def test_section_anchor_ids_use_slug_format(synthetic_client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_memory_sort_toggle_renders_three_options(synthetic_client) -> None:
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+def test_memory_sort_toggle_renders_three_options(client) -> None:
+    body = client.get("/memory").get_data(as_text=True)
     assert "Recently updated" in body
     assert "Recently created" in body
     assert "Name (A–Z)" in body
 
 
-def test_memory_default_sort_is_updated_desc(synthetic_client) -> None:
-    body = synthetic_client.get("/memory").get_data(as_text=True)
+def test_memory_default_sort_is_updated_desc(client) -> None:
+    body = client.get("/memory").get_data(as_text=True)
     m = re.search(r"sort-option active[^>]*>\s*Recently updated", body)
     assert m
 
 
-def test_memory_invalid_sort_falls_back_to_default(synthetic_client) -> None:
-    body = synthetic_client.get("/memory?sort=bogus").get_data(as_text=True)
+def test_memory_invalid_sort_falls_back_to_default(client) -> None:
+    body = client.get("/memory?sort=bogus").get_data(as_text=True)
     m = re.search(r"sort-option active[^>]*>\s*Recently updated", body)
     assert m
 
 
-def test_memory_global_first_regardless_of_sort(synthetic_client) -> None:
+def test_memory_global_first_regardless_of_sort(client) -> None:
     """Global memory's <details> always appears before any project memory's,
     no matter what sort is in effect."""
     for sort in ("updated_desc", "name_asc", "created_desc"):
-        body = synthetic_client.get(f"/memory?sort={sort}").get_data(as_text=True)
+        body = client.get(f"/memory?sort={sort}").get_data(as_text=True)
         global_pos = body.find('id="global-memory"')
         project_pos = body.find('id="memory-00000000-0000-0000-0000-0000000000a1"')
         assert global_pos != -1
@@ -166,14 +157,14 @@ def test_memory_global_first_regardless_of_sort(synthetic_client) -> None:
         assert global_pos < project_pos, f"global must precede project under sort={sort}"
 
 
-def test_memory_name_asc_sort_param_active(synthetic_client) -> None:
-    body = synthetic_client.get("/memory?sort=name_asc").get_data(as_text=True)
+def test_memory_name_asc_sort_param_active(client) -> None:
+    body = client.get("/memory?sort=name_asc").get_data(as_text=True)
     m = re.search(r"sort-option active[^>]*>\s*Name \(A–Z\)", body)
     assert m
 
 
-def test_memory_created_desc_sort_param_active(synthetic_client) -> None:
-    body = synthetic_client.get("/memory?sort=created_desc").get_data(as_text=True)
+def test_memory_created_desc_sort_param_active(client) -> None:
+    body = client.get("/memory?sort=created_desc").get_data(as_text=True)
     m = re.search(r"sort-option active[^>]*>\s*Recently created", body)
     assert m
 
@@ -183,8 +174,8 @@ def test_memory_created_desc_sort_param_active(synthetic_client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_home_global_memory_pre_collapsed(synthetic_client) -> None:
-    body = synthetic_client.get("/").get_data(as_text=True)
+def test_home_global_memory_pre_collapsed(client) -> None:
+    body = client.get("/").get_data(as_text=True)
     m = re.search(
         r'<details class="memory-block memory-block-global"[^>]*id="global-memory"[^>]*>',
         body,
@@ -193,11 +184,11 @@ def test_home_global_memory_pre_collapsed(synthetic_client) -> None:
     assert " open" not in m.group(0)
 
 
-def test_home_global_memory_anchor_id_matches_memory_view(synthetic_client) -> None:
+def test_home_global_memory_anchor_id_matches_memory_view(client) -> None:
     """Home's global memory and /memory's must use the same anchor id so a
     search hit linked to either resolves."""
-    home = synthetic_client.get("/").get_data(as_text=True)
-    mem = synthetic_client.get("/memory").get_data(as_text=True)
+    home = client.get("/").get_data(as_text=True)
+    mem = client.get("/memory").get_data(as_text=True)
     assert 'id="global-memory"' in home
     assert 'id="global-memory"' in mem
 
@@ -207,9 +198,9 @@ def test_home_global_memory_anchor_id_matches_memory_view(synthetic_client) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_memory_js_loaded_on_every_page(synthetic_client) -> None:
+def test_memory_js_loaded_on_every_page(client) -> None:
     """Anchor expansion is needed on any page that links to a memory anchor.
     Loading site-wide via base.html is the simplest correct thing."""
     for path in ("/", "/memory", "/conversations", "/search"):
-        body = synthetic_client.get(path).get_data(as_text=True)
+        body = client.get(path).get_data(as_text=True)
         assert 'src="/static/memory.js"' in body, f"{path} missing memory.js"

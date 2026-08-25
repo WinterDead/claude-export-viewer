@@ -30,7 +30,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from viewer.parser import load_export
+from tests.conftest import SYNTHETIC_EXPORT
 from viewer.render import split_help_page
 from viewer.routes import HELP_CONTENT_PATH
 
@@ -51,19 +51,18 @@ ALL_PAGES = (
 
 
 @pytest.fixture
-def synthetic_client(tmp_path: Path, fixtures_dir: Path):
-    export = load_export(fixtures_dir / "synthetic_export.zip")
+def client(export, tmp_path: Path):
     # Footer echoes source_paths verbatim; pin it to a bare filename so the
     # verify-negative checks below exercise the help template, not the
     # absolute path of wherever this test run happens to live.
-    export = dataclasses.replace(export, source_paths=["synthetic_export.zip"])
-    app = create_app(export, db_path=tmp_path / "viewer.sqlite")
+    pinned = dataclasses.replace(export, source_paths=[SYNTHETIC_EXPORT])
+    app = create_app(pinned, db_path=tmp_path / "viewer.sqlite")
     return app.test_client()
 
 
 @pytest.fixture
-def help_body(synthetic_client) -> str:
-    r = synthetic_client.get("/help")
+def help_body(client) -> str:
+    r = client.get("/help")
     assert r.status_code == 200
     return r.get_data(as_text=True)
 
@@ -73,13 +72,13 @@ def help_body(synthetic_client) -> str:
 # ---------------------------------------------------------------------------
 
 
-def test_help_returns_200(synthetic_client) -> None:
-    assert synthetic_client.get("/help").status_code == 200
+def test_help_returns_200(client) -> None:
+    assert client.get("/help").status_code == 200
 
 
 @pytest.mark.parametrize("page", ALL_PAGES)
-def test_nav_link_present_on_every_page(synthetic_client, page: str) -> None:
-    r = synthetic_client.get(page)
+def test_nav_link_present_on_every_page(client, page: str) -> None:
+    r = client.get(page)
     assert r.status_code == 200
     assert 'href="/help"' in r.get_data(as_text=True)
 
@@ -143,13 +142,13 @@ def test_every_source_heading_has_a_resolving_anchor(help_body: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_internal_links_resolve(synthetic_client, help_body: str) -> None:
+def test_internal_links_resolve(client, help_body: str) -> None:
     hrefs = set(re.findall(r'href="(/[^"]*)"', help_body))
     assert any(h.startswith("/conversations?tag=untagged") for h in hrefs)
     assert "/history" in hrefs
     assert "/search" in hrefs
     for href in sorted(hrefs):
-        r = synthetic_client.get(href)
+        r = client.get(href)
         assert r.status_code < 400, f"{href} returned {r.status_code}"
 
 

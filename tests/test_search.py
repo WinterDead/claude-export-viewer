@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-from app import create_app
 from viewer.parser import load_export
 from viewer.search import (
     SENTINEL_CLOSE,
@@ -31,11 +30,6 @@ from viewer.search import (
 
 
 @pytest.fixture
-def synthetic_export(fixtures_dir: Path):
-    return load_export(fixtures_dir / "synthetic_export.zip")
-
-
-@pytest.fixture
 def dangling_export(fixtures_dir: Path):
     return load_export(fixtures_dir / "bad_dangling_memory.zip")
 
@@ -48,32 +42,23 @@ def conn():
     c.close()
 
 
-@pytest.fixture
-def synthetic_client(tmp_path: Path, fixtures_dir: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
-
-
 # ---------------------------------------------------------------------------
 # Index population.
 # ---------------------------------------------------------------------------
 
 
-def test_index_export_populates_expected_row_count(conn, synthetic_export) -> None:
+def test_index_export_populates_expected_row_count(conn, export) -> None:
     """One row per searchable surface — see ``_expected_row_count`` formula."""
-    n = index_export(conn, synthetic_export)
+    n = index_export(conn, export)
     # 4 conversations + 10 messages + 2 projects + 3 docs + 1 global memory
     # + 1 project memory (proj-A only) + 0 orphans = 21.
     assert n == 21
 
 
-def test_index_export_is_idempotent(conn, synthetic_export) -> None:
+def test_index_export_is_idempotent(conn, export) -> None:
     """Calling twice rebuilds — count stays the same, no duplicates."""
-    a = index_export(conn, synthetic_export)
-    b = index_export(conn, synthetic_export)
+    a = index_export(conn, export)
+    b = index_export(conn, export)
     assert a == b
 
 
@@ -94,8 +79,8 @@ def test_index_export_includes_orphan_project_memory(conn, dangling_export) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_search_finds_text_in_message_body(conn, synthetic_export) -> None:
-    index_export(conn, synthetic_export)
+def test_search_finds_text_in_message_body(conn, export) -> None:
+    index_export(conn, export)
     results = search(conn, "hello")
     assert results.total >= 1
     msg_hits = [h for h in results.hits if h.kind == "message"]
@@ -106,49 +91,49 @@ def test_search_finds_text_in_message_body(conn, synthetic_export) -> None:
     assert SENTINEL_CLOSE in msg_hits[0].snippet
 
 
-def test_search_finds_project_meta(conn, synthetic_export) -> None:
-    index_export(conn, synthetic_export)
+def test_search_finds_project_meta(conn, export) -> None:
+    index_export(conn, export)
     results = search(conn, "synthetic")
     kinds = {h.kind for h in results.hits}
     assert "project_meta" in kinds
 
 
-def test_search_finds_global_memory(conn, synthetic_export) -> None:
-    index_export(conn, synthetic_export)
+def test_search_finds_global_memory(conn, export) -> None:
+    index_export(conn, export)
     results = search(conn, '"work context"')
     assert any(h.kind == "memory_global" for h in results.hits)
 
 
-def test_search_empty_query_returns_no_results_no_error(conn, synthetic_export) -> None:
-    index_export(conn, synthetic_export)
+def test_search_empty_query_returns_no_results_no_error(conn, export) -> None:
+    index_export(conn, export)
     results = search(conn, "")
     assert results.hits == []
     assert results.total == 0
     assert results.error is None
 
 
-def test_search_no_match_returns_zero(conn, synthetic_export) -> None:
-    index_export(conn, synthetic_export)
+def test_search_no_match_returns_zero(conn, export) -> None:
+    index_export(conn, export)
     results = search(conn, "zzzzzzzznoneofthese")
     assert results.total == 0
     assert results.hits == []
     assert results.error is None
 
 
-def test_search_malformed_query_surfaces_error(conn, synthetic_export) -> None:
+def test_search_malformed_query_surfaces_error(conn, export) -> None:
     """An unclosed quote is detected as operator syntax (because of the bare
     ``"``) and passed through to FTS5 — which then raises a syntax error.
     Surface a friendly message rather than letting Flask 500."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     results = search(conn, '"unclosed')
     assert results.error is not None
     assert "syntax error" in results.error.lower()
     assert results.hits == []
 
 
-def test_search_phrase_query(conn, synthetic_export) -> None:
+def test_search_phrase_query(conn, export) -> None:
     """Quoted phrases match exact word sequences."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     results = search(conn, '"hello from human"')
     assert any(
         "hello from human" in h.snippet.replace(SENTINEL_OPEN, "").replace(SENTINEL_CLOSE, "")
@@ -156,16 +141,16 @@ def test_search_phrase_query(conn, synthetic_export) -> None:
     )
 
 
-def test_search_prefix_query(conn, synthetic_export) -> None:
+def test_search_prefix_query(conn, export) -> None:
     """``hum*`` matches ``human``."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     results = search(conn, "hum*")
     assert results.total >= 1
 
 
-def test_search_capped_flag(conn, synthetic_export) -> None:
+def test_search_capped_flag(conn, export) -> None:
     """Cap at limit; ``capped`` set when total exceeds limit."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     # A query matching every row in the synthetic fixture — small total, so
     # the cap shouldn't trigger.
     results = search(conn, "synthetic OR hello OR joke OR memory", limit=200)
@@ -289,19 +274,19 @@ def test_preprocess_lowercase_and_is_natural_language() -> None:
         "covid-19",
     ],
 )
-def test_search_handles_natural_language_punctuation(conn, synthetic_export, raw) -> None:
+def test_search_handles_natural_language_punctuation(conn, export, raw) -> None:
     """No ``OperationalError``, no ``error`` field — empty results are fine,
     the point is that the query doesn't crash FTS5."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     results = search(conn, raw)
     assert results.error is None, f"unexpected FTS5 error on natural-language query {raw!r}"
 
 
-def test_search_natural_language_finds_real_matches(conn, synthetic_export) -> None:
+def test_search_natural_language_finds_real_matches(conn, export) -> None:
     """End-to-end: 'starter project,' should hit the project_meta rows for
     both project A ('non-starter project ...') and project B ('starter
     project ...')."""
-    index_export(conn, synthetic_export)
+    index_export(conn, export)
     results = search(conn, "starter project,")
     assert results.error is None
     assert any(h.kind == "project_meta" for h in results.hits)
@@ -312,7 +297,7 @@ def test_search_natural_language_finds_real_matches(conn, synthetic_export) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_sentinel_chars_stripped_with_warning(conn, synthetic_export, caplog) -> None:
+def test_sentinel_chars_stripped_with_warning(conn, export, caplog) -> None:
     """Bodies containing pre-existing ``\\x02`` bytes are scrubbed at index
     time so the snippet sentinels remain unambiguous, with a warning logged
     rather than an exception (preserve-and-flag)."""
@@ -323,14 +308,14 @@ def test_sentinel_chars_stripped_with_warning(conn, synthetic_export, caplog) ->
     from viewer.parser import TextBlock
 
     poisoned = "hello \x02 with stx and \x02hit\x02 lookalike"
-    conv = synthetic_export.conversations[0]
+    conv = export.conversations[0]
     msg = conv.messages[1]  # assistant message
     new_block = TextBlock(text=poisoned)
     new_msg = replace(msg, content=[new_block])
     new_conv = replace(conv, messages=[conv.messages[0], new_msg])
     new_export = replace(
-        synthetic_export,
-        conversations=[new_conv, *synthetic_export.conversations[1:]],
+        export,
+        conversations=[new_conv, *export.conversations[1:]],
     )
 
     with caplog.at_level(logging.WARNING, logger="viewer.search"):
@@ -351,41 +336,41 @@ def test_sentinel_chars_stripped_with_warning(conn, synthetic_export, caplog) ->
 # ---------------------------------------------------------------------------
 
 
-def test_search_route_renders_form_and_hint_on_empty_query(synthetic_client) -> None:
-    body = synthetic_client.get("/search").get_data(as_text=True)
+def test_search_route_renders_form_and_hint_on_empty_query(client) -> None:
+    body = client.get("/search").get_data(as_text=True)
     assert 'name="q"' in body
     assert "exact phrase" in body or "quotes" in body  # hint text
 
 
-def test_search_route_renders_results_for_match(synthetic_client) -> None:
-    body = synthetic_client.get("/search?q=hello").get_data(as_text=True)
+def test_search_route_renders_results_for_match(client) -> None:
+    body = client.get("/search?q=hello").get_data(as_text=True)
     assert "<mark>" in body  # the highlight survived sentinel substitution
     # A conversation link should appear.
     assert "/conversations/" in body
 
 
-def test_search_route_no_match_renders_empty_state(synthetic_client) -> None:
-    body = synthetic_client.get("/search?q=zzzznevermatches").get_data(as_text=True)
+def test_search_route_no_match_renders_empty_state(client) -> None:
+    body = client.get("/search?q=zzzznevermatches").get_data(as_text=True)
     assert "No matches" in body
 
 
-def test_search_route_branch_aware_links(synthetic_client) -> None:
+def test_search_route_branch_aware_links(client) -> None:
     """A hit on a non-canonical message links via ``?branch=<uuid>``;
     a hit on a canonical message links without it."""
     # conv-4 fixture: f4 is the non-canonical sibling, body "Joke B".
-    body = synthetic_client.get("/search?q=regenerate").get_data(as_text=True)
+    body = client.get("/search?q=regenerate").get_data(as_text=True)
     f4 = "00000000-0000-0000-0000-0000000000f4"
     assert f"branch={f4}" in body
     assert f"#msg-{f4}" in body
 
     # f5 is canonical. Search for its unique text.
-    body = synthetic_client.get("/search?q=another").get_data(as_text=True)
+    body = client.get("/search?q=another").get_data(as_text=True)
     f5 = "00000000-0000-0000-0000-0000000000f5"
     assert f"#msg-{f5}" in body
     # Canonical hit must NOT carry a branch override.
     assert f"branch={f5}" not in body
 
 
-def test_search_route_malformed_query_renders_friendly_error(synthetic_client) -> None:
-    body = synthetic_client.get("/search?q=%22unclosed").get_data(as_text=True)
+def test_search_route_malformed_query_renders_friendly_error(client) -> None:
+    body = client.get("/search?q=%22unclosed").get_data(as_text=True)
     assert "syntax error" in body.lower()

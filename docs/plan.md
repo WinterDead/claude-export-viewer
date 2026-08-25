@@ -555,12 +555,22 @@ format (manifest + four category zips replacing the single zip) and the memory s
   banner; the manifest optional. **(Provisional — approved as the starting shape pending
   the design record and operator testing.)**
 - Dark mode.
-- Dev docs excluded from the default GitHub download via `export-ignore` (streamlined
-  download, files remain browsable; no separate branch or repo). *(briefs shipped ahead
-  of the arc — commit "Exclude development briefs from generated archives" covers
-  `docs/briefs/**` only; whether the remaining dev docs join the exclusion is an operator
-  decision for the arc — Session R Phase 2 close-out.)*
+- Development briefs excluded from the default GitHub download via `export-ignore`
+  (streamlined download, files remain browsable; no separate branch or repo). *(Shipped
+  ahead of the arc — commit "Exclude development briefs from generated archives" covers
+  `docs/briefs/**`; the briefs-only scope was ratified with the Session S brief.)*
 - The codebase review (Session R Phase 2) feeding the arc's implementation briefs.
+- **Session S (implementation, in progress).** `docs/format-support-design.md` (ratified
+  2026-08-25) is the arc's normative design record, committed verbatim at the session's
+  open. Phase 1 shipped *(locked)*: conftest consolidation — shared `export_path` /
+  `export` / `app` / `client` / `app_factory` fixtures and one CSRF scraper in
+  `tests/conftest.py`, with `export_path` as the container-format parametrisation seam;
+  monkeypatch hygiene for the module-global rebinding tests; the fixture regeneration
+  guard (`tests/test_fixtures.py`, both directions); `/inspect` added to
+  `test_highlighting.py`'s asset matrix; and the current-format fixture sets
+  (`tests/fixtures/current/`, `current_two_part/`, `current_dangling/`) emitted by the
+  extended registry in `build_fixtures.py`. Phases 2–4 (loader/model, upload/storage,
+  rendering/copy) follow under the same brief.
 
 ### Later (unscheduled, non-blocking)
 

@@ -17,12 +17,9 @@ from __future__ import annotations
 import io
 import zipfile
 from html.parser import HTMLParser
-from pathlib import Path
 from urllib.parse import urlencode
 
 import pytest
-
-from app import create_app
 
 CONV_MINIMAL = "00000000-0000-0000-0000-0000000000c1"
 CONV_THINKING = "00000000-0000-0000-0000-0000000000d1"
@@ -31,15 +28,6 @@ CONV_ATTACHMENT = "00000000-0000-0000-0000-0000000000e1"
 # The four checkbox states: (Include thinking blocks, Include attachment text).
 STATES = [(True, True), (True, False), (False, True), (False, False)]
 STATE_IDS = ["think-on_att-on", "think-on_att-off", "think-off_att-on", "think-off_att-off"]
-
-
-@pytest.fixture
-def client(fixtures_dir: Path, tmp_path: Path):
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
 
 
 # ---------------------------------------------------------------------------

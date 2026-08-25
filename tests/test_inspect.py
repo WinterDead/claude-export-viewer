@@ -33,7 +33,7 @@ from pathlib import Path
 
 import pytest
 
-from app import create_app
+from tests.conftest import SYNTHETIC_EXPORT, scrape_csrf
 from viewer.parser import ExportFormatError, load_export, load_export_from_bytes
 from viewer.routes import HELP_CONTENT_PATH
 
@@ -55,36 +55,11 @@ INSPECT_MEMORY_MARKER = "zzyzx-inspect-memory-marker"
 
 
 @pytest.fixture
-def app_factory(tmp_path: Path, fixtures_dir: Path):
-    """Build an app whose cache paths (active zip, pickle, viewer.sqlite)
-    all live under ``tmp_path/cache`` so the no-trace snapshots cover the
-    complete on-disk state the app can write."""
-
-    def _build():
-        import app as app_module
-
-        cache_dir = tmp_path / "cache"
-        app_module.CACHE_DIR = cache_dir
-        app_module.ACTIVE_ZIP = cache_dir / "active_export.zip"
-        app_module.PARSE_CACHE = cache_dir / "parsed_export.pkl"
-
-        flask_app = create_app(
-            fixtures_dir / "synthetic_export.zip",
-            db_path=cache_dir / "viewer.sqlite",
-        )
-        flask_app.config["ACTIVE_ZIP_PATH"] = app_module.ACTIVE_ZIP
-        flask_app.config["PARSE_CACHE_PATH"] = app_module.PARSE_CACHE
-        return flask_app
-
-    return _build
-
-
-@pytest.fixture
-def inspect_zip_bytes(fixtures_dir: Path) -> bytes:
+def inspect_zip_bytes(export_path: Path) -> bytes:
     """The synthetic fixture rebuilt in memory with distinguishing markers:
     a renamed conversation, a renamed project, and a unique token appended
     to the global memory. Never written to disk."""
-    src = (fixtures_dir / "synthetic_export.zip").read_bytes()
+    src = export_path.read_bytes()
     with zipfile.ZipFile(io.BytesIO(src)) as zf:
         files = {n: zf.read(n) for n in zf.namelist()}
 
@@ -110,18 +85,11 @@ def inspect_zip_bytes(fixtures_dir: Path) -> bytes:
     return out.getvalue()
 
 
-def _csrf(client, page: str = "/inspect") -> str:
-    body = client.get(page).get_data(as_text=True)
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m
-    return m.group(1)
-
-
 def _start_inspection(client, zip_bytes: bytes, filename: str = INSPECT_FILENAME) -> None:
     r = client.post(
         "/inspect",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "export_zip": (io.BytesIO(zip_bytes), filename),
         },
         content_type="multipart/form-data",
@@ -130,7 +98,7 @@ def _start_inspection(client, zip_bytes: bytes, filename: str = INSPECT_FILENAME
 
 
 def _exit_inspection(client) -> None:
-    r = client.post("/inspect/exit", data={"csrf_token": _csrf(client)})
+    r = client.post("/inspect/exit", data={"csrf_token": scrape_csrf(client, "/inspect")})
     assert r.status_code == 302
 
 
@@ -212,7 +180,7 @@ def test_mutating_routes_refuse_and_db_is_byte_identical(
     _start_inspection(client, inspect_zip_bytes)
     before = db_file.read_bytes()
 
-    token = _csrf(client)
+    token = scrape_csrf(client, "/inspect")
     conv_uuid = flask_app.config["EXPORT"].conversations[0].uuid
     project_uuid = flask_app.config["EXPORT"].projects[0].uuid
 
@@ -359,7 +327,7 @@ def test_return_restores_primary_view_and_tagging(app_factory, inspect_zip_bytes
     r = client.post(
         "/tag",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "conversation_uuid": conv_uuid,
             "project_uuid": project_uuid,
         },
@@ -387,7 +355,7 @@ def test_corrupt_zip_errors_and_leaves_view_untouched(
     r = client.post(
         "/inspect",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "export_zip": (io.BytesIO(corrupt), "corrupt.zip"),
         },
         content_type="multipart/form-data",
@@ -403,7 +371,7 @@ def test_corrupt_zip_errors_and_leaves_view_untouched(
     r = client.post(
         "/inspect",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "export_zip": (io.BytesIO(corrupt), "corrupt.zip"),
         },
         content_type="multipart/form-data",
@@ -516,12 +484,12 @@ def test_help_page_renders_inspect_section_with_link(app_factory) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_load_export_from_bytes_matches_path_load(fixtures_dir: Path) -> None:
-    data = (fixtures_dir / "synthetic_export.zip").read_bytes()
-    from_bytes = load_export_from_bytes(data, name="synthetic_export.zip")
-    from_path = load_export(fixtures_dir / "synthetic_export.zip")
+def test_load_export_from_bytes_matches_path_load(export_path: Path) -> None:
+    data = export_path.read_bytes()
+    from_bytes = load_export_from_bytes(data, name=SYNTHETIC_EXPORT)
+    from_path = load_export(export_path)
 
-    assert from_bytes.source_paths == ["synthetic_export.zip"]
+    assert from_bytes.source_paths == [SYNTHETIC_EXPORT]
     assert from_bytes.user.uuid == from_path.user.uuid
     assert {c.uuid for c in from_bytes.conversations} == {c.uuid for c in from_path.conversations}
     assert {p.uuid for p in from_bytes.projects} == {p.uuid for p in from_path.projects}

@@ -10,8 +10,11 @@ static/vendor/** -text
 
 # Test fixtures are byte-exact artefacts of build_fixtures.py. The real
 # archives are detected as binary anyway; corrupt_export.zip is deliberately
-# text-like bytes, so pin the whole set against EOL conversion.
+# text-like bytes and the current-format sets include a JSON manifest, so pin
+# them all against EOL conversion.
 tests/fixtures/*.zip -text
+tests/fixtures/current/** -text
+tests/fixtures/current_two_part/** -text
+tests/fixtures/current_dangling/** -text
 
-# 
 docs/briefs/** export-ignore

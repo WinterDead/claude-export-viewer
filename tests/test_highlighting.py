@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from viewer.parser import load_export
+from tests.conftest import SYNTHETIC_EXPORT
 
 VENDOR_JS = "/static/vendor/highlightjs/highlight.min.js"
 VENDOR_PS_JS = "/static/vendor/highlightjs/powershell.min.js"
@@ -41,6 +41,7 @@ ALL_PAGES = (
     "/memory",
     "/search",
     "/upload",
+    "/inspect",
     "/history",
     "/orphans",
     "/help",
@@ -48,10 +49,9 @@ ALL_PAGES = (
 
 
 @pytest.fixture
-def synthetic_client(tmp_path: Path, fixtures_dir: Path):
-    export = load_export(fixtures_dir / "synthetic_export.zip")
-    export = dataclasses.replace(export, source_paths=["synthetic_export.zip"])
-    app = create_app(export, db_path=tmp_path / "viewer.sqlite")
+def client(export, tmp_path: Path):
+    pinned = dataclasses.replace(export, source_paths=[SYNTHETIC_EXPORT])
+    app = create_app(pinned, db_path=tmp_path / "viewer.sqlite")
     return app.test_client()
 
 
@@ -61,20 +61,20 @@ def synthetic_client(tmp_path: Path, fixtures_dir: Path):
 
 
 @pytest.mark.parametrize("path", [VENDOR_JS, VENDOR_PS_JS, VENDOR_CSS, VENDOR_LICENSE, INIT_JS])
-def test_static_asset_served(synthetic_client, path: str) -> None:
-    assert synthetic_client.get(path).status_code == 200
+def test_static_asset_served(client, path: str) -> None:
+    assert client.get(path).status_code == 200
 
 
-def test_vendored_license_is_bsd_3_clause(synthetic_client) -> None:
+def test_vendored_license_is_bsd_3_clause(client) -> None:
     """The brief requires the upstream BSD-3-Clause licence to ship alongside
     the bundle for the public repo."""
-    body = synthetic_client.get(VENDOR_LICENSE).get_data(as_text=True)
+    body = client.get(VENDOR_LICENSE).get_data(as_text=True)
     assert "BSD 3-Clause License" in body
 
 
-def test_vendored_bundle_is_the_recorded_version(synthetic_client) -> None:
+def test_vendored_bundle_is_the_recorded_version(client) -> None:
     """The vendor README records 11.11.1; the bundle must actually be it."""
-    body = synthetic_client.get(VENDOR_JS).get_data(as_text=True)
+    body = client.get(VENDOR_JS).get_data(as_text=True)
     assert "11.11.1" in body
 
 
@@ -84,16 +84,16 @@ def test_vendored_bundle_is_the_recorded_version(synthetic_client) -> None:
 
 
 @pytest.mark.parametrize("page", ALL_PAGES)
-def test_includes_exactly_once_per_page(synthetic_client, page: str) -> None:
-    r = synthetic_client.get(page)
+def test_includes_exactly_once_per_page(client, page: str) -> None:
+    r = client.get(page)
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     for asset in (VENDOR_JS, VENDOR_PS_JS, VENDOR_CSS, INIT_JS):
         assert body.count(asset) == 1, f"{asset} appears {body.count(asset)}× on {page}"
 
 
-def test_include_order_on_a_representative_page(synthetic_client) -> None:
-    body = synthetic_client.get("/").get_data(as_text=True)
+def test_include_order_on_a_representative_page(client) -> None:
+    body = client.get("/").get_data(as_text=True)
     # Theme CSS before style.css: app styles must win equal-specificity ties.
     assert body.index(VENDOR_CSS) < body.index("/static/style.css")
     # Bundle before the powershell module (registers into the hljs global)
@@ -106,8 +106,8 @@ def test_include_order_on_a_representative_page(synthetic_client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_init_script_scope_and_mark_guard(synthetic_client) -> None:
-    src = synthetic_client.get(INIT_JS).get_data(as_text=True)
+def test_init_script_scope_and_mark_guard(client) -> None:
+    src = client.get(INIT_JS).get_data(as_text=True)
     # Scope: markdown-rendered containers only, block code only.
     assert ".markdown-body pre code" in src
     # Skip-marks guard: search-hit <mark> tags must never be rebuilt away.

@@ -8,12 +8,10 @@ and CSRF wiring — none of which live in the SQLite layer.
 from __future__ import annotations
 
 import re
-from pathlib import Path
 
-import pytest
 from werkzeug.datastructures import MultiDict
 
-from app import create_app
+from tests.conftest import scrape_csrf
 
 # Synthetic UUIDs — match the happy-path fixture.
 ACCOUNT = "00000000-0000-0000-0000-000000000001"
@@ -23,24 +21,6 @@ CONV_1 = "00000000-0000-0000-0000-0000000000c1"
 CONV_2 = "00000000-0000-0000-0000-0000000000d1"
 CONV_3 = "00000000-0000-0000-0000-0000000000e1"
 CONV_4 = "00000000-0000-0000-0000-0000000000f1"
-
-
-@pytest.fixture
-def client(tmp_path: Path, fixtures_dir: Path):
-    """Flask test client wired to an isolated SQLite at ``tmp_path``."""
-    app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    return app.test_client()
-
-
-def _csrf(client) -> str:
-    """Pull a valid CSRF token from a rendered conversations page."""
-    body = client.get("/conversations").get_data(as_text=True)
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m, "no csrf_token in rendered form"
-    return m.group(1)
 
 
 def _current_tag(client, conv_uuid: str) -> str | None:
@@ -72,7 +52,7 @@ def test_bulk_rejects_missing_csrf_token(client) -> None:
 def test_bulk_rejects_invalid_mode(client) -> None:
     r = client.post(
         "/tag/bulk",
-        data={"csrf_token": _csrf(client), "mode": "delete", "project_uuid": PROJ_A},
+        data={"csrf_token": scrape_csrf(client), "mode": "delete", "project_uuid": PROJ_A},
     )
     assert r.status_code == 400
 
@@ -82,7 +62,7 @@ def test_bulk_rejects_unknown_conversation(client) -> None:
         "/tag/bulk",
         data=MultiDict(
             [
-                ("csrf_token", _csrf(client)),
+                ("csrf_token", scrape_csrf(client)),
                 ("mode", "tag"),
                 ("project_uuid", PROJ_A),
                 ("conversation_uuid", "00000000-0000-0000-0000-00000000bad0"),
@@ -97,7 +77,7 @@ def test_bulk_rejects_unknown_project(client) -> None:
         "/tag/bulk",
         data=MultiDict(
             [
-                ("csrf_token", _csrf(client)),
+                ("csrf_token", scrape_csrf(client)),
                 ("mode", "tag"),
                 ("project_uuid", "00000000-0000-0000-0000-00000000bad0"),
                 ("conversation_uuid", CONV_1),
@@ -112,7 +92,7 @@ def test_bulk_rejects_tag_mode_without_project(client) -> None:
         "/tag/bulk",
         data=MultiDict(
             [
-                ("csrf_token", _csrf(client)),
+                ("csrf_token", scrape_csrf(client)),
                 ("mode", "tag"),
                 ("conversation_uuid", CONV_1),
             ]
@@ -125,7 +105,7 @@ def test_bulk_with_no_selection_is_no_op_redirect(client) -> None:
     r = client.post(
         "/tag/bulk",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client),
             "mode": "tag",
             "project_uuid": PROJ_A,
         },
@@ -140,7 +120,7 @@ def test_bulk_with_no_selection_is_no_op_redirect(client) -> None:
 
 def _post_bulk(client, mode, *, conv_uuids, project_uuid=""):
     pairs = [
-        ("csrf_token", _csrf(client)),
+        ("csrf_token", scrape_csrf(client)),
         ("mode", mode),
         ("project_uuid", project_uuid),
     ]
@@ -194,7 +174,7 @@ def test_untag_mode_does_not_require_project(client) -> None:
         "/tag/bulk",
         data=MultiDict(
             [
-                ("csrf_token", _csrf(client)),
+                ("csrf_token", scrape_csrf(client)),
                 ("mode", "untag"),
                 ("conversation_uuid", CONV_1),
             ]

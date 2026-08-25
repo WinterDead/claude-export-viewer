@@ -13,13 +13,11 @@ from __future__ import annotations
 import io
 import re
 import sqlite3
-from pathlib import Path
 
 import pytest
 from werkzeug.datastructures import MultiDict
 
-from app import create_app
-from viewer.parser import load_export
+from tests.conftest import scrape_csrf
 from viewer.state import compute_tag_state, purge_orphan_tags
 from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, all_tags, init_db, set_tag
 
@@ -30,24 +28,6 @@ CONV_1 = "00000000-0000-0000-0000-0000000000c1"
 CONV_2 = "00000000-0000-0000-0000-0000000000d1"
 CONV_3 = "00000000-0000-0000-0000-0000000000e1"
 GHOST_CONV = "00000000-0000-0000-0000-0000000ghost"  # not in any fixture
-
-
-@pytest.fixture
-def app(tmp_path: Path, fixtures_dir: Path):
-    return create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-
-
-@pytest.fixture
-def client(app):
-    return app.test_client()
-
-
-@pytest.fixture
-def synthetic_export(fixtures_dir: Path):
-    return load_export(fixtures_dir / "synthetic_export.zip")
 
 
 @pytest.fixture
@@ -75,13 +55,6 @@ def _tags(app) -> dict[str, str]:
         return all_tags(get_db())
 
 
-def _csrf(client) -> str:
-    body = client.get("/upload").get_data(as_text=True)
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m, "no csrf_token in rendered form"
-    return m.group(1)
-
-
 def _selected_option(page_body: str, conv_uuid: str) -> str | None:
     """Return the value of the selected ``project_uuid`` option in the tag
     dropdown belonging to ``conv_uuid``. Attribute order varies (the sentinel
@@ -99,7 +72,7 @@ def _post_tag(client, conv_uuid: str, project_uuid: str, next_url: str = ""):
     return client.post(
         "/tag",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client),
             "conversation_uuid": conv_uuid,
             "project_uuid": project_uuid,
             "next": next_url,
@@ -109,7 +82,7 @@ def _post_tag(client, conv_uuid: str, project_uuid: str, next_url: str = ""):
 
 def _post_bulk(client, mode: str, *, conv_uuids: list[str], project_uuid: str = ""):
     pairs = [
-        ("csrf_token", _csrf(client)),
+        ("csrf_token", scrape_csrf(client)),
         ("mode", mode),
         ("project_uuid", project_uuid),
     ]
@@ -295,27 +268,27 @@ def test_sentinel_project_detail_url_redirects_to_filtered_list(client) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_sentinel_on_live_conversation_is_bucket_live(conn, synthetic_export) -> None:
+def test_sentinel_on_live_conversation_is_bucket_live(conn, export) -> None:
     set_tag(conn, CONV_1, NO_PROJECT_SENTINEL)
-    state = compute_tag_state(conn, synthetic_export)
+    state = compute_tag_state(conn, export)
     assert state.live == {CONV_1: NO_PROJECT_SENTINEL}
     assert state.orphan_conv == {}
     assert state.orphan_project == {}
     assert state.orphan_count == 0
 
 
-def test_sentinel_on_missing_conversation_is_orphan_conv(conn, synthetic_export) -> None:
+def test_sentinel_on_missing_conversation_is_orphan_conv(conn, export) -> None:
     """Orphan-conversation detection still applies — the row is unreachable."""
     set_tag(conn, GHOST_CONV, NO_PROJECT_SENTINEL)
-    state = compute_tag_state(conn, synthetic_export)
+    state = compute_tag_state(conn, export)
     assert state.orphan_conv == {GHOST_CONV: NO_PROJECT_SENTINEL}
     assert state.orphan_project == {}
 
 
-def test_purge_clears_sentinel_orphan_conv_but_not_live_sentinel(conn, synthetic_export) -> None:
+def test_purge_clears_sentinel_orphan_conv_but_not_live_sentinel(conn, export) -> None:
     set_tag(conn, CONV_1, NO_PROJECT_SENTINEL)  # live — must survive
     set_tag(conn, GHOST_CONV, NO_PROJECT_SENTINEL)  # orphan-conv — gone
-    state = compute_tag_state(conn, synthetic_export)
+    state = compute_tag_state(conn, export)
     assert purge_orphan_tags(conn, state) == 1
     assert all_tags(conn) == {CONV_1: NO_PROJECT_SENTINEL}
 
@@ -338,7 +311,7 @@ def test_orphan_conv_sentinel_row_has_no_missing_project_badge(client, app) -> N
 
 def test_purge_route_clears_sentinel_orphan_conv_row(client, app) -> None:
     _seed(app, **{GHOST_CONV: NO_PROJECT_SENTINEL, CONV_1: NO_PROJECT_SENTINEL})
-    r = client.post("/orphans/purge", data={"csrf_token": _csrf(client), "confirm": "yes"})
+    r = client.post("/orphans/purge", data={"csrf_token": scrape_csrf(client), "confirm": "yes"})
     assert r.status_code == 302
     assert _tags(app) == {CONV_1: NO_PROJECT_SENTINEL}
 
@@ -348,23 +321,12 @@ def test_purge_route_clears_sentinel_orphan_conv_row(client, app) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_sentinel_tag_survives_reimport(tmp_path: Path, fixtures_dir: Path) -> None:
+def test_sentinel_tag_survives_reimport(app_factory, fixtures_dir) -> None:
     """Upload a new archive containing the same conversations: the sentinel
     row persists and still resolves as live — the triage workflow's core
     property (reviewed-as-No-Project status survives while new conversations
     arrive untagged)."""
-    import app as app_module
-
-    app_module.CACHE_DIR = tmp_path / "cache"
-    app_module.ACTIVE_ZIP = tmp_path / "cache" / "active_export.zip"
-    app_module.PARSE_CACHE = tmp_path / "cache" / "parsed_export.pkl"
-
-    flask_app = create_app(
-        fixtures_dir / "synthetic_export.zip",
-        db_path=tmp_path / "viewer.sqlite",
-    )
-    flask_app.config["ACTIVE_ZIP_PATH"] = app_module.ACTIVE_ZIP
-    flask_app.config["PARSE_CACHE_PATH"] = app_module.PARSE_CACHE
+    flask_app = app_factory()
     client = flask_app.test_client()
 
     _post_tag(client, CONV_1, NO_PROJECT_SENTINEL)
@@ -374,7 +336,7 @@ def test_sentinel_tag_survives_reimport(tmp_path: Path, fixtures_dir: Path) -> N
     r = client.post(
         "/upload",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client),
             "export_zip": (io.BytesIO(new_zip), "reimport.zip"),
         },
         content_type="multipart/form-data",

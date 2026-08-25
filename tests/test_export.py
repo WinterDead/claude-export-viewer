@@ -14,7 +14,6 @@ from __future__ import annotations
 import dataclasses
 import io
 import json
-import re
 import tomllib
 import zipfile
 from datetime import UTC, date, datetime
@@ -23,6 +22,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
+from tests.conftest import scrape_csrf
 from viewer.db import get_db
 from viewer.export import (
     ExportOptions,
@@ -38,7 +38,6 @@ from viewer.parser import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
-    load_export,
 )
 from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, set_tag
 
@@ -299,20 +298,12 @@ def _exotic_conversations() -> list[Conversation]:
 
 
 @pytest.fixture
-def client(fixtures_dir: Path, tmp_path: Path):
-    base = load_export(fixtures_dir / "synthetic_export.zip")
-    export = dataclasses.replace(
-        base, conversations=[*base.conversations, *_exotic_conversations()]
+def client(export, tmp_path: Path):
+    extended = dataclasses.replace(
+        export, conversations=[*export.conversations, *_exotic_conversations()]
     )
-    app = create_app(export, db_path=tmp_path / "viewer.sqlite")
+    app = create_app(extended, db_path=tmp_path / "viewer.sqlite")
     return app.test_client()
-
-
-def _csrf(client, page: str = "/inspect") -> str:
-    body = client.get(page).get_data(as_text=True)
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m
-    return m.group(1)
 
 
 def _get_export(client, uuid: str, query: str = ""):
@@ -340,7 +331,7 @@ def _tag(client, conv_uuid: str, project_uuid: str) -> None:
     r = client.post(
         "/tag",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "conversation_uuid": conv_uuid,
             "project_uuid": project_uuid,
         },
@@ -349,7 +340,7 @@ def _tag(client, conv_uuid: str, project_uuid: str) -> None:
 
 
 def _post_bulk(client, uuids: list[str], **form):
-    data = {"csrf_token": _csrf(client), "conversation_uuid": uuids, **form}
+    data = {"csrf_token": scrape_csrf(client, "/inspect"), "conversation_uuid": uuids, **form}
     return client.post("/conversations/export", data=data)
 
 
@@ -788,31 +779,6 @@ def test_bulk_endpoint_honours_both_toggles(client) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def app_factory(tmp_path: Path, fixtures_dir: Path):
-    """App with every writable path (active zip, pickle, viewer.sqlite)
-    relocated under ``tmp_path/cache`` so a snapshot of that directory covers
-    the complete on-disk state the app can write (Session K pattern)."""
-
-    def _build():
-        import app as app_module
-
-        cache_dir = tmp_path / "cache"
-        app_module.CACHE_DIR = cache_dir
-        app_module.ACTIVE_ZIP = cache_dir / "active_export.zip"
-        app_module.PARSE_CACHE = cache_dir / "parsed_export.pkl"
-
-        flask_app = create_app(
-            fixtures_dir / "synthetic_export.zip",
-            db_path=cache_dir / "viewer.sqlite",
-        )
-        flask_app.config["ACTIVE_ZIP_PATH"] = app_module.ACTIVE_ZIP
-        flask_app.config["PARSE_CACHE_PATH"] = app_module.PARSE_CACHE
-        return flask_app
-
-    return _build
-
-
 def _snapshot(root: Path) -> dict[str, bytes]:
     return {
         str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()
@@ -842,11 +808,11 @@ INSPECTED_TITLE = "Inspected-only conversation"
 
 
 @pytest.fixture
-def inspect_zip_bytes(fixtures_dir: Path) -> bytes:
+def inspect_zip_bytes(export_path: Path) -> bytes:
     """The synthetic fixture rebuilt in memory with conv-1 retitled, so a
     test can tell the inspected view from the primary. Never written to
     disk."""
-    src = (fixtures_dir / "synthetic_export.zip").read_bytes()
+    src = export_path.read_bytes()
     with zipfile.ZipFile(io.BytesIO(src)) as zf:
         files = {n: zf.read(n) for n in zf.namelist()}
     convs = json.loads(files["conversations.json"])
@@ -863,7 +829,7 @@ def _start_inspection(client, zip_bytes: bytes) -> None:
     r = client.post(
         "/inspect",
         data={
-            "csrf_token": _csrf(client),
+            "csrf_token": scrape_csrf(client, "/inspect"),
             "export_zip": (io.BytesIO(zip_bytes), "other_export.zip"),
         },
         content_type="multipart/form-data",
@@ -900,7 +866,7 @@ def test_exports_serve_inspected_content_and_leave_no_trace(
 
     # Exit, and confirm the whole cycle — inspect, export, bulk export,
     # return — left the cache untouched (the K no-trace rule survives).
-    r = client.post("/inspect/exit", data={"csrf_token": _csrf(client)})
+    r = client.post("/inspect/exit", data={"csrf_token": scrape_csrf(client, "/inspect")})
     assert r.status_code == 302
     assert _snapshot(cache_dir) == before
 

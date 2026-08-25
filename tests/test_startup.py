@@ -21,6 +21,7 @@ import pytest
 
 import app as app_module
 from app import create_app
+from tests.conftest import SYNTHETIC_EXPORT, scrape_csrf
 
 # The banner copy is chat-authored and ships byte-exact (Session I brief,
 # Task C). The template wraps it across two source lines, so assertions
@@ -34,7 +35,9 @@ BANNER_RE = re.compile(r'<aside class="load-error-banner"[^>]*>(.*?)</aside>', r
 
 
 @pytest.fixture
-def startup_env(tmp_path: Path, fixtures_dir: Path, monkeypatch) -> SimpleNamespace:
+def startup_env(
+    tmp_path: Path, fixtures_dir: Path, export_path: Path, monkeypatch
+) -> SimpleNamespace:
     """Point app.py's module-level source paths into ``tmp_path``.
 
     Tests populate the active/dev files they need, then call
@@ -58,7 +61,7 @@ def startup_env(tmp_path: Path, fixtures_dir: Path, monkeypatch) -> SimpleNamesp
         dev_copy=dev_copy,
         db_path=tmp_path / "viewer.sqlite",
         corrupt_bytes=(fixtures_dir / "corrupt_export.zip").read_bytes(),
-        good_bytes=(fixtures_dir / "synthetic_export.zip").read_bytes(),
+        good_bytes=export_path.read_bytes(),
     )
 
 
@@ -67,13 +70,6 @@ def _banner_text(body: str) -> str | None:
     if m is None:
         return None
     return " ".join(m.group(1).split())
-
-
-def _csrf_token(client) -> str:
-    body = client.get("/upload").get_data(as_text=True)
-    m = re.search(r'name="csrf_token" value="([^"]+)"', body)
-    assert m
-    return m.group(1)
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +97,7 @@ def test_corrupt_stored_export_falls_back_to_fixture(startup_env) -> None:
 
     # The fixture loaded, not the corrupt archive.
     loaded = [Path(p).name for p in flask_app.config["EXPORT"].source_paths]
-    assert loaded == ["synthetic_export.zip"]
+    assert loaded == [SYNTHETIC_EXPORT]
     assert flask_app.config["STORED_EXPORT_FAILED"] is True
 
     # The corrupt file was left exactly where it was, byte-identical.
@@ -150,7 +146,7 @@ def test_successful_upload_clears_banner_and_replaces_file(startup_env) -> None:
     client = flask_app.test_client()
     assert _banner_text(client.get("/").get_data(as_text=True)) is not None
 
-    token = _csrf_token(client)
+    token = scrape_csrf(client)
     r = client.post(
         "/upload",
         data={
@@ -194,7 +190,7 @@ def test_corrupt_dev_copy_falls_back_silently(startup_env, caplog) -> None:
         flask_app = create_app(None, db_path=startup_env.db_path)
 
     loaded = [Path(p).name for p in flask_app.config["EXPORT"].source_paths]
-    assert loaded == ["synthetic_export.zip"]
+    assert loaded == [SYNTHETIC_EXPORT]
     assert flask_app.config["STORED_EXPORT_FAILED"] is False
 
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
