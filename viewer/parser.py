@@ -1,10 +1,14 @@
-"""Read a Claude.ai data-export ZIP and produce a typed in-memory model.
+"""Read a Claude.ai data export and produce a typed in-memory model.
 
-See ``docs/export-schema.md`` for the source-format reference. The parser is
-defensive about missing optional fields, unknown extras, and structural quirks
-(orphan parents, parent cycles, dangling project memories, account-uuid
-mismatches) — see ``tests/fixtures/build_fixtures.py`` for the full set of
-behaviours covered.
+Two container formats load through this module (``docs/export-schema.md`` is
+the source-format reference; ``docs/format-support-design.md`` the design
+record): the legacy single ZIP, and the current manifest-plus-category-ZIPs
+delivery. Detection is by content, never filename (§2 of the record); both
+containers normalise into the same :class:`Export`. The parser is defensive
+about missing optional fields, unknown extras, and structural quirks (orphan
+parents, parent cycles, dangling project memories, account-uuid mismatches) —
+see ``tests/fixtures/build_fixtures.py`` for the full set of behaviours
+covered.
 """
 
 from __future__ import annotations
@@ -15,10 +19,11 @@ import logging
 import re
 import zipfile
 from collections.abc import Sequence
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +31,28 @@ logger = logging.getLogger(__name__)
 SENTINEL_PARENT_UUID = "00000000-0000-4000-8000-000000000000"
 KNOWN_SENDERS = frozenset({"human", "assistant"})
 BATCH_FILENAME_RE = re.compile(r"-batch-(\d{4})\.zip$", re.IGNORECASE)
+# Current-format part naming, e.g. ``conversations-001.zip``. Filenames never
+# decide parsing (record §2); this pattern only feeds the isolated-later-part
+# warning, the current-format sibling of the legacy batch warning above.
+PART_FILENAME_RE = re.compile(r"-(\d{3})\.zip$", re.IGNORECASE)
+
+# Container kinds. ``CONTAINER_LEGACY`` is the single-ZIP format; the four
+# category names match the current format's manifest ``category`` values.
+CONTAINER_LEGACY = "legacy"
+CATEGORY_CONVERSATIONS = "conversations"
+CATEGORY_PROJECTS = "projects"
+CATEGORY_MEMORIES = "memories"
+CATEGORY_LIGHT_METADATA = "light_metadata"
+ALL_CATEGORIES = (
+    CATEGORY_CONVERSATIONS,
+    CATEGORY_PROJECTS,
+    CATEGORY_MEMORIES,
+    CATEGORY_LIGHT_METADATA,
+)
+
+_LEGACY_TRIO = frozenset({"users.json", "memories.json", "conversations.json"})
+_PROJECT_MEMBER_RE = re.compile(r"projects/[^/]+\.json$")
+_MEMORY_MEMBER_RE = re.compile(r"memories/[^/]+\.json$")
 
 
 class ExportFormatError(Exception):
@@ -45,15 +72,26 @@ Sender = str
 @dataclass(frozen=True, slots=True)
 class TextBlock:
     text: str
+    # Citation records preserved as given (uuid, offsets into the raw text,
+    # details.url) — the Sources-list renderer consumes them (record §9.4).
     citations: list[Any] = field(default_factory=list)
+    # Per-block timing, preserved raw and unrendered (record §6).
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ThinkingBlock:
     thinking: str
-    summaries: list[Any] = field(default_factory=list)
+    # Summary strings, extracted from the export's ``{summary: …}`` items
+    # (record §6). The ``signature`` field is deliberately dropped and never
+    # reaches this model — the decision of record (§6), disclosed in help.
+    summaries: list[str] = field(default_factory=list)
     truncated: bool = False
     cut_off: bool = False
+    thinking_hidden: bool = False
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +101,10 @@ class ToolUseBlock:
     input: dict[str, Any]
     integration_name: str | None = None
     is_mcp: bool = False
+    # Rendering-hint dict, shape preserved for the record §9 renderers.
+    display_content: dict[str, Any] | None = None
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +113,32 @@ class ToolResultBlock:
     name: str
     is_error: bool
     inner: list[dict[str, Any]]
+    display_content: dict[str, Any] | None = None
+    # ``meta.output_format_category`` — ``md`` routes the result text through
+    # the Markdown pipeline (record §9.6).
+    output_format_category: str | None = None
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class InjectedPromptBlock:
+    """Current-format block: prompt text the product injected into the
+    conversation, typed per record §6 (previously an UnknownBlock).
+
+    The ``type`` class attribute keeps the pre-typed rendering and export
+    fallbacks byte-identical until the record §9.1 card ships: both the
+    reading view's placeholder card and the serializer's unrecognised-block
+    line name blocks via ``.type``.
+    """
+
+    type: ClassVar[str] = "injected_prompt_block"
+
+    prompt: str
+    initial_turn_only: bool = False
+    skip_on_truncated_continuation: bool = False
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
 
 
 # Preserve-and-flag slot for content-block types this parser doesn't know
@@ -89,7 +157,9 @@ class UnknownBlock:
         return f"UnknownBlock(type={self.type!r}, raw_keys={len(self.raw)})"
 
 
-ContentBlock = TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock | UnknownBlock
+ContentBlock = (
+    TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock | InjectedPromptBlock | UnknownBlock
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -192,14 +262,52 @@ class User:
     email_address: str
 
 
+# The new memory system's file records (current format only). ``path`` is
+# absolute-style with a leading ``/`` and an open-set taxonomy — the viewer
+# never enumerates expected directories (record §7).
+@dataclass(frozen=True, slots=True)
+class MemoryFile:
+    path: str
+    content: str
+    updated_at: datetime
+
+
+# One login event from ``login_history.json`` (current format only) — the
+# Account page's table row (record §8).
+@dataclass(frozen=True, slots=True)
+class LoginEvent:
+    timestamp: datetime
+    method: str
+    ip_address: str
+    city: str | None = None
+    region: str | None = None
+    country: str | None = None
+    browser_family: str | None = None
+    browser_version: str | None = None
+    device_family: str | None = None
+    os_family: str | None = None
+    os_version: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Export:
-    user: User
-    global_memory: GlobalMemory
+    # ``user`` and ``global_memory`` are ``None`` when the current format's
+    # light_metadata / memories category is missing from the loaded set — any
+    # subset loads, degrading features visibly (record §3). Legacy loads
+    # always carry both (the required trio).
+    user: User | None
+    global_memory: GlobalMemory | None
     projects: list[Project]
     conversations: list[Conversation]
     orphan_project_memories: list[ProjectMemory]
     source_paths: list[str]
+    memory_files: list[MemoryFile] = field(default_factory=list)
+    login_events: list[LoginEvent] = field(default_factory=list)
+    # Which of the four categories the loaded set supplied, in
+    # ``ALL_CATEGORIES`` order — drives the degraded-view banner. A legacy
+    # archive carries all four (its login-history section is empty by
+    # format, not by omission).
+    categories: tuple[str, ...] = ALL_CATEGORIES
 
 
 # ---------------------------------------------------------------------------
@@ -208,17 +316,25 @@ class Export:
 
 
 def load_export(source: str | Path | Sequence[str | Path]) -> Export:
-    """Read one or more Claude.ai export ZIPs and return a typed ``Export``.
+    """Read a Claude.ai export — either container format — into an ``Export``.
 
     ``source`` may be:
 
-    - a path to a single ``.zip`` file,
-    - a path to a directory containing one or more ``.zip`` files, or
-    - a sequence of zip paths (multi-batch case).
+    - a path to a single ``.zip`` file (a legacy archive or one current
+      category zip),
+    - a path to a directory of ``.zip`` files (legacy multi-batch, or a
+      current-format set of category zips), or
+    - a sequence of zip paths.
 
-    Multi-batch behaviour: ``users.json`` and ``memories.json`` must agree
-    across batches; ``conversations`` and ``projects`` are merged with
-    first-batch-wins deduplication by uuid (debug-warned on collision).
+    Each zip is identified by content (record §2) and the load dispatches:
+    current category zips go through the set loader (any subset loads,
+    record §3); everything else takes the legacy pipeline, whose required-
+    files check raises its precise errors. Mixing the two containers in one
+    load is refused — the record defines no semantics for it.
+
+    Legacy multi-batch behaviour is unchanged: ``users.json`` and
+    ``memories.json`` must agree across batches; ``conversations`` and
+    ``projects`` merge with first-batch-wins deduplication by uuid.
 
     Raises :class:`ExportFormatError` for missing required files, malformed
     JSON, or structural invariants that cannot be relaxed (e.g. ``users.json``
@@ -226,13 +342,24 @@ def load_export(source: str | Path | Sequence[str | Path]) -> Export:
     """
     paths = _resolve_paths(source)
 
-    if len(paths) == 1:
-        match = BATCH_FILENAME_RE.search(paths[0].name)
-        if match and match.group(1) != "0000":
-            logger.warning(
-                "loaded a single archive with batch index %s — earlier batches may be missing",
-                match.group(1),
+    kinds = {p: _sniff_zip_path(p) for p in paths}
+    current = [p for p in paths if kinds[p] in ALL_CATEGORIES]
+    if current:
+        others = [p for p in paths if kinds[p] not in ALL_CATEGORIES]
+        if others:
+            raise ExportFormatError(
+                "cannot mix current-format category archives with other archives "
+                f"in one load: {', '.join(p.name for p in others)}"
             )
+        parts = []
+        for p in paths:
+            zf, _names = _open_zip(p)
+            parts.append((kinds[p], zf, str(p), p.name))
+        return _load_current_set(parts)
+
+    # Legacy pipeline — unchanged.
+    if len(paths) == 1:
+        _warn_if_isolated_batch(paths[0].name)
 
     parsed = [_load_one_zip(p) for p in paths]
     if len(parsed) == 1:
@@ -243,23 +370,21 @@ def load_export(source: str | Path | Sequence[str | Path]) -> Export:
 def load_export_from_bytes(data: bytes, *, name: str) -> Export:
     """Parse a single export archive held entirely in memory.
 
-    Same validation pipeline as :func:`load_export`, but nothing is read
-    from or written to disk — inspect mode (v1.2 Session K) feeds uploaded
-    bytes straight in, honouring its no-trace rule. ``name`` is a display
-    name only (typically the browser-supplied filename); it becomes the
-    single ``source_paths`` entry and feeds the same batch-index warning a
-    path-based load gets.
+    Same detection and validation pipeline as :func:`load_export`, but
+    nothing is read from or written to disk — inspect mode (v1.2 Session K)
+    feeds uploaded bytes straight in, honouring its no-trace rule. ``name``
+    is a display name only (typically the browser-supplied filename); it
+    becomes the single ``source_paths`` entry and feeds the same
+    isolated-batch/part warning a path-based load gets.
     """
-    match = BATCH_FILENAME_RE.search(name)
-    if match and match.group(1) != "0000":
-        logger.warning(
-            "loaded a single archive with batch index %s — earlier batches may be missing",
-            match.group(1),
-        )
+    _warn_if_isolated_batch(name)
     try:
         zf_ctx = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile as e:
         raise ExportFormatError(f"not a valid zip archive: {name} ({e})") from e
+    kind = sniff_container(set(zf_ctx.namelist()))
+    if kind in ALL_CATEGORIES:
+        return _load_current_set([(kind, zf_ctx, name, name)])
     return _parse_zip(zf_ctx, source_name=name)
 
 
@@ -281,6 +406,267 @@ def _resolve_paths(source: str | Path | Sequence[str | Path]) -> list[Path]:
     if not paths:
         raise ExportFormatError("no source paths provided")
     return paths
+
+
+# ---------------------------------------------------------------------------
+# Container detection (record §2) — by content, never filename.
+# ---------------------------------------------------------------------------
+
+
+def sniff_container(names: set[str]) -> str | None:
+    """Identify a zip's container kind from its member names.
+
+    Returns :data:`CONTAINER_LEGACY`, one of :data:`ALL_CATEGORIES`, or
+    ``None`` when the layout matches neither format. The current-category
+    signatures are strict (record §2's table) so that a damaged legacy
+    archive falls through to the legacy pipeline and gets its precise
+    required-files error instead of being misread as a category zip.
+    """
+    files = {n for n in names if not n.endswith("/")}
+    root = {n for n in files if "/" not in n}
+
+    if _LEGACY_TRIO <= root:
+        return CONTAINER_LEGACY
+    if {"users.json", "login_history.json"} <= root:
+        return CATEGORY_LIGHT_METADATA
+    if files == {"conversations.json"}:
+        return CATEGORY_CONVERSATIONS
+    if not root and files:
+        if all(_PROJECT_MEMBER_RE.fullmatch(n) for n in files):
+            return CATEGORY_PROJECTS
+        if all(_MEMORY_MEMBER_RE.fullmatch(n) for n in files):
+            return CATEGORY_MEMORIES
+    return None
+
+
+def sniff_manifest(data: bytes) -> bool:
+    """True when ``data`` is a current-format manifest: JSON parsing to an
+    object that contains ``data_files``. The manifest is metadata for the
+    expected-vs-supplied banner only — its ``export_url`` links are live
+    signed downloads and are **never fetched** (record §2).
+    """
+    try:
+        parsed = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    return isinstance(parsed, dict) and "data_files" in parsed
+
+
+def _open_zip(path: Path) -> tuple[zipfile.ZipFile, set[str]]:
+    if not path.is_file():
+        raise ExportFormatError(f"export archive not found: {path}")
+    try:
+        zf = zipfile.ZipFile(path)
+    except zipfile.BadZipFile as e:
+        raise ExportFormatError(f"not a valid zip archive: {path} ({e})") from e
+    return zf, set(zf.namelist())
+
+
+def _sniff_zip_path(path: Path) -> str | None:
+    zf, names = _open_zip(path)
+    with zf:
+        return sniff_container(names)
+
+
+def _warn_if_isolated_batch(name: str) -> None:
+    match = BATCH_FILENAME_RE.search(name)
+    if match and match.group(1) != "0000":
+        logger.warning(
+            "loaded a single archive with batch index %s — earlier batches may be missing",
+            match.group(1),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Current-format set loading (record §3): any subset of category zips,
+# multi-part categories merged, everything normalised into ``Export``.
+# ---------------------------------------------------------------------------
+
+
+def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Export:
+    """Assemble an ``Export`` from current-format category zips.
+
+    ``parts`` holds ``(category, open zipfile, source_name, display_name)``
+    in supplied order; every zipfile is closed before returning. There is no
+    required category — each missing one degrades its features visibly,
+    never fatally (record §3).
+
+    Multi-part categories (*provisional — no multi-part export has been
+    observed*): parts merge by concatenating their lists in supplied order.
+    A conversation or project uuid appearing in more than one part is
+    preserved once (first occurrence wins) and flagged with a ``WARNING``;
+    multi-part memories must agree on ``conversations_memory`` (mirroring
+    the legacy batch invariant) while ``project_memories`` merge first-wins
+    and ``memory_files`` concatenate.
+    """
+    by_category: dict[str, list[tuple[zipfile.ZipFile, str, str]]] = {}
+    source_paths: list[str] = []
+    with ExitStack() as stack:
+        for category, zf, source_name, display_name in parts:
+            stack.enter_context(zf)
+            by_category.setdefault(category, []).append((zf, source_name, display_name))
+            source_paths.append(source_name)
+
+        for category, cat_parts in by_category.items():
+            _warn_if_parts_incomplete(category, [display for _, _, display in cat_parts])
+
+        user: User | None = None
+        login_events: list[LoginEvent] = []
+        for zf, _src, _display in by_category.get(CATEGORY_LIGHT_METADATA, []):
+            part_user = _load_users(zf)
+            if user is None:
+                user = part_user
+            elif part_user != user:
+                raise ExportFormatError(
+                    f"users.json differs across parts: {user.uuid} vs {part_user.uuid}"
+                )
+            login_events.extend(_load_login_history(zf))
+
+        global_memory: GlobalMemory | None = None
+        project_memories: dict[str, ProjectMemory] = {}
+        memory_files: list[MemoryFile] = []
+        for zf, _src, _display in by_category.get(CATEGORY_MEMORIES, []):
+            part_global, part_memories, part_files = _load_memories_category(zf)
+            if global_memory is None:
+                global_memory = part_global
+            elif part_global.content != global_memory.content:
+                raise ExportFormatError("conversation memory differs across memories parts")
+            for puid, mem in part_memories.items():
+                if puid in project_memories:
+                    logger.warning("duplicate project memory across memories parts: %s", puid)
+                    continue
+                project_memories[puid] = mem
+            memory_files.extend(part_files)
+
+        if (
+            user is not None
+            and global_memory is not None
+            and global_memory.account_uuid
+            and global_memory.account_uuid != user.uuid
+        ):
+            logger.warning(
+                "account uuid mismatch: users.json=%s, memories=%s",
+                user.uuid,
+                global_memory.account_uuid,
+            )
+
+        projects: list[Project] = []
+        seen_proj: set[str] = set()
+        for zf, _src, _display in by_category.get(CATEGORY_PROJECTS, []):
+            for p in _load_project_files(zf, project_memories):
+                if p.uuid in seen_proj:
+                    logger.warning("duplicate project uuid across parts: %s", p.uuid)
+                    continue
+                seen_proj.add(p.uuid)
+                projects.append(p)
+        # Dangling-memory computation runs against the merged project list;
+        # with no projects category supplied, every project memory dangles —
+        # real content, surfaced on the Memory page rather than dropped
+        # (preserve-and-flag).
+        orphan_memories: list[ProjectMemory] = []
+        for puid, mem in project_memories.items():
+            if puid not in seen_proj:
+                logger.warning("dangling project memory for uuid not in archive: %s", puid)
+                orphan_memories.append(mem)
+
+        conversations: list[Conversation] = []
+        seen_conv: set[str] = set()
+        account_uuid = user.uuid if user is not None else ""
+        for zf, _src, _display in by_category.get(CATEGORY_CONVERSATIONS, []):
+            for conv in _load_conversations(zf, account_uuid):
+                if conv.uuid in seen_conv:
+                    logger.warning(
+                        "duplicate conversation uuid across parts: %s — keeping the "
+                        "first occurrence",
+                        conv.uuid,
+                    )
+                    continue
+                seen_conv.add(conv.uuid)
+                conversations.append(conv)
+
+    return Export(
+        user=user,
+        global_memory=global_memory,
+        projects=projects,
+        conversations=conversations,
+        orphan_project_memories=orphan_memories,
+        source_paths=source_paths,
+        memory_files=memory_files,
+        login_events=login_events,
+        categories=tuple(c for c in ALL_CATEGORIES if c in by_category),
+    )
+
+
+def _warn_if_parts_incomplete(category: str, display_names: list[str]) -> None:
+    """Warn when a category's part numbering suggests missing parts.
+
+    Filename-derived and warning-only (record §2: filenames never decide
+    parsing). Files without the ``-NNN`` suffix contribute nothing.
+    """
+    numbers = []
+    for name in display_names:
+        m = PART_FILENAME_RE.search(name)
+        if m:
+            numbers.append(int(m.group(1)))
+    if not numbers:
+        return
+    expected = set(range(max(numbers) + 1))
+    missing = sorted(expected - set(numbers))
+    if missing:
+        logger.warning(
+            "category %s parts look incomplete — missing part number(s): %s",
+            category,
+            ", ".join(f"{n:03d}" for n in missing),
+        )
+
+
+def _load_login_history(zf: zipfile.ZipFile) -> list[LoginEvent]:
+    if "login_history.json" not in zf.namelist():
+        logger.warning("light_metadata archive has no login_history.json — no login history")
+        return []
+    raw = _read_json(zf, "login_history.json")
+    events = raw.get("login_events") if isinstance(raw, dict) else None
+    if not isinstance(events, list):
+        logger.warning("login_history.json has no login_events list — no login history")
+        return []
+    parsed: list[LoginEvent] = []
+    for rec in events:
+        if not isinstance(rec, dict):
+            logger.warning("skipping non-dict login event")
+            continue
+        location = rec.get("location_info") or {}
+        agent = rec.get("user_agent") or {}
+        parsed.append(
+            LoginEvent(
+                timestamp=_parse_dt(rec.get("timestamp")),
+                method=rec.get("method", "") or "",
+                ip_address=rec.get("ip_address", "") or "",
+                city=location.get("city"),
+                region=location.get("region"),
+                country=location.get("country"),
+                browser_family=agent.get("browser_family"),
+                browser_version=agent.get("browser_version"),
+                device_family=agent.get("device_family"),
+                os_family=agent.get("os_family"),
+                os_version=agent.get("os_version"),
+            )
+        )
+    return parsed
+
+
+def _load_memories_category(
+    zf: zipfile.ZipFile,
+) -> tuple[GlobalMemory, dict[str, ProjectMemory], list[MemoryFile]]:
+    """Read the current format's single ``memories/<uuid>.json`` dict."""
+    members = [n for n in zf.namelist() if _MEMORY_MEMBER_RE.fullmatch(n)]
+    if len(members) != 1:
+        raise ExportFormatError(
+            f"memories archive must contain exactly one memories/<uuid>.json, got {len(members)}"
+        )
+    rec = _read_json(zf, members[0])
+    if not isinstance(rec, dict):
+        raise ExportFormatError(f"{members[0]} must be a JSON object")
+    return _parse_memories_record(rec)
 
 
 # ---------------------------------------------------------------------------
@@ -306,12 +692,14 @@ def _parse_zip(zf_ctx: zipfile.ZipFile, *, source_name: str) -> Export:
     :func:`load_export`, a bare filename for :func:`load_export_from_bytes`."""
     with zf_ctx as zf:
         names = set(zf.namelist())
+        # The legacy container's required trio — per-container by design:
+        # the current format has no required file at all (record §3).
         for required in ("users.json", "memories.json", "conversations.json"):
             if required not in names:
                 raise ExportFormatError(f"missing required file: {required}")
 
         user = _load_users(zf)
-        global_memory, project_memories_by_uuid = _load_memories(zf)
+        global_memory, project_memories_by_uuid, memory_files = _load_memories(zf)
 
         if global_memory.account_uuid and global_memory.account_uuid != user.uuid:
             logger.warning(
@@ -330,6 +718,7 @@ def _parse_zip(zf_ctx: zipfile.ZipFile, *, source_name: str) -> Export:
         conversations=conversations,
         orphan_project_memories=orphan_memories,
         source_paths=[source_name],
+        memory_files=memory_files,
     )
 
 
@@ -361,13 +750,23 @@ def _load_users(zf: zipfile.ZipFile) -> User:
 
 def _load_memories(
     zf: zipfile.ZipFile,
-) -> tuple[GlobalMemory, dict[str, ProjectMemory]]:
+) -> tuple[GlobalMemory, dict[str, ProjectMemory], list[MemoryFile]]:
+    """Legacy ``memories.json``: a list of exactly one record."""
     raw = _read_json(zf, "memories.json")
     if not isinstance(raw, list) or len(raw) != 1:
         raise ExportFormatError("memories.json must contain exactly one record")
     rec = raw[0]
     if not isinstance(rec, dict):
         raise ExportFormatError("memories.json record must be a dict")
+    return _parse_memories_record(rec)
+
+
+def _parse_memories_record(
+    rec: dict[str, Any],
+) -> tuple[GlobalMemory, dict[str, ProjectMemory], list[MemoryFile]]:
+    """Shared body for both memories shapes — the legacy list-of-1 record and
+    the current format's ``memories/<uuid>.json`` dict. ``memory_files`` is
+    current-only; a legacy record simply has none."""
     account_uuid = rec.get("account_uuid", "") or ""
     global_memory = GlobalMemory(
         content=rec.get("conversations_memory", "") or "",
@@ -380,7 +779,19 @@ def _load_memories(
             project_uuid=puid,
             account_uuid=account_uuid,
         )
-    return global_memory, project_memories
+    memory_files: list[MemoryFile] = []
+    for f in rec.get("memory_files") or []:
+        if not isinstance(f, dict):
+            logger.warning("skipping non-dict memory_files entry")
+            continue
+        memory_files.append(
+            MemoryFile(
+                path=f.get("path", "") or "",
+                content=f.get("content", "") or "",
+                updated_at=_parse_dt(f.get("updated_at")),
+            )
+        )
+    return global_memory, project_memories, memory_files
 
 
 # ---------------------------------------------------------------------------
@@ -392,13 +803,30 @@ def _load_projects(
     zf: zipfile.ZipFile,
     project_memories: dict[str, ProjectMemory],
 ) -> tuple[list[Project], list[ProjectMemory]]:
+    projects = _load_project_files(zf, project_memories)
+    seen_uuids = {p.uuid for p in projects}
+
+    orphan_memories: list[ProjectMemory] = []
+    for puid, mem in project_memories.items():
+        if puid not in seen_uuids:
+            logger.warning("dangling project memory for uuid not in archive: %s", puid)
+            orphan_memories.append(mem)
+
+    return projects, orphan_memories
+
+
+def _load_project_files(
+    zf: zipfile.ZipFile,
+    project_memories: dict[str, ProjectMemory],
+) -> list[Project]:
+    """Parse every ``projects/<uuid>.json`` member — shared by both container
+    pipelines; dangling-memory computation stays with the callers (the
+    current loader runs it only after merging all parts)."""
     project_files = sorted(
         n for n in zf.namelist() if n.startswith("projects/") and n.endswith(".json")
     )
 
     projects: list[Project] = []
-    seen_uuids: set[str] = set()
-
     for name in project_files:
         raw = _read_json(zf, name)
         if not isinstance(raw, dict):
@@ -408,7 +836,6 @@ def _load_projects(
         if not puid:
             logger.warning("project file %s missing uuid; skipping", name)
             continue
-        seen_uuids.add(puid)
         creator = raw.get("creator") or {}
         projects.append(
             Project(
@@ -425,14 +852,7 @@ def _load_projects(
                 memory=project_memories.get(puid),
             )
         )
-
-    orphan_memories: list[ProjectMemory] = []
-    for puid, mem in project_memories.items():
-        if puid not in seen_uuids:
-            logger.warning("dangling project memory for uuid not in archive: %s", puid)
-            orphan_memories.append(mem)
-
-    return projects, orphan_memories
+    return projects
 
 
 def _parse_doc(raw: dict[str, Any]) -> ProjectDoc:
@@ -548,13 +968,21 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
         return TextBlock(
             text=raw.get("text", "") or "",
             citations=raw.get("citations") or [],
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
         )
     if block_type == "thinking":
+        # ``signature`` is deliberately not read: opaque attestation blobs
+        # with no render or export use, excluded from model and cache — the
+        # decision of record (design record §6, disclosed in help).
         return ThinkingBlock(
             thinking=raw.get("thinking", "") or "",
-            summaries=raw.get("summaries") or [],
+            summaries=_parse_summaries(raw.get("summaries"), seen_warnings),
             truncated=bool(raw.get("truncated")),
             cut_off=bool(raw.get("cut_off")),
+            thinking_hidden=bool(raw.get("thinking_hidden")),
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
         )
     if block_type == "tool_use":
         name = raw.get("name", "") or ""
@@ -564,13 +992,31 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
             input=raw.get("input") or {},
             integration_name=raw.get("integration_name"),
             is_mcp=bool(raw.get("is_mcp_app")) or ":" in name,
+            display_content=raw.get("display_content"),
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
         )
     if block_type == "tool_result":
+        meta = raw.get("meta") or {}
         return ToolResultBlock(
             tool_use_id=raw.get("tool_use_id", "") or "",
             name=raw.get("name", "") or "",
             is_error=bool(raw.get("is_error")),
             inner=raw.get("content") or [],
+            display_content=raw.get("display_content"),
+            output_format_category=(
+                meta.get("output_format_category") if isinstance(meta, dict) else None
+            ),
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
+        )
+    if block_type == "injected_prompt_block":
+        return InjectedPromptBlock(
+            prompt=raw.get("prompt", "") or "",
+            initial_turn_only=bool(raw.get("initial_turn_only")),
+            skip_on_truncated_continuation=bool(raw.get("skip_on_truncated_continuation")),
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
         )
 
     # Preserve-and-flag (house rule): the block travels with the message as
@@ -581,6 +1027,27 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
         logger.warning("unknown content block type %r — preserved as UnknownBlock", block_type)
         seen_warnings.add(key)
     return UnknownBlock(type=str(block_type) if block_type is not None else "", raw=raw)
+
+
+def _parse_summaries(raw: Any, seen_warnings: set[str]) -> list[str]:
+    """Extract thinking-summary strings from the export's ``{summary: …}``
+    items (record §6). Unexpected item shapes are preserved as their string
+    form with a warning rather than dropped."""
+    summaries: list[str] = []
+    for item in raw or []:
+        if isinstance(item, dict) and "summary" in item:
+            summaries.append(str(item["summary"] or ""))
+        elif isinstance(item, str):
+            summaries.append(item)
+        else:
+            if "summary_shape" not in seen_warnings:
+                logger.warning(
+                    "unexpected thinking-summary item shape %r — preserved as text",
+                    type(item).__name__,
+                )
+                seen_warnings.add("summary_shape")
+            summaries.append(str(item))
+    return summaries
 
 
 def _parse_attachment(raw: dict[str, Any]) -> Attachment:
@@ -800,8 +1267,13 @@ def _main() -> None:
     branched = sum(1 for c in export.conversations if c.branch_points)
     project_memories = sum(1 for p in export.projects if p.memory is not None)
 
+    user = (
+        f"{export.user.full_name} <{export.user.email_address}>"
+        if export.user is not None
+        else "(no account file in set)"
+    )
     print(f"Sources       : {', '.join(export.source_paths)}")
-    print(f"User          : {export.user.full_name} <{export.user.email_address}>")
+    print(f"User          : {user}")
     print(f"Conversations : {len(export.conversations)}")
     print(f"Messages      : {total_msgs}")
     print(f"Branched convs: {branched}")

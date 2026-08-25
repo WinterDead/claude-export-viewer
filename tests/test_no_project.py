@@ -17,9 +17,17 @@ import sqlite3
 import pytest
 from werkzeug.datastructures import MultiDict
 
-from tests.conftest import scrape_csrf
+from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS, scrape_csrf
 from viewer.state import compute_tag_state, purge_orphan_tags
 from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, all_tags, init_db, set_tag
+
+
+@pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+def export_path(request, fixtures_dir):
+    """Dual-format module (v1.3.0 Session S): export-dependent tests in this
+    file run against both container formats."""
+    return fixtures_dir / request.param
+
 
 # Synthetic UUIDs — match the happy-path fixture.
 PROJ_A = "00000000-0000-0000-0000-0000000000a1"

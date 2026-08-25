@@ -170,7 +170,7 @@ def index_export(conn: sqlite3.Connection, export: Export) -> int:
                     (project.uuid, _scrub(project.memory.content)),
                 )
 
-        if export.global_memory.content:
+        if export.global_memory is not None and export.global_memory.content:
             conn.execute(
                 "INSERT INTO search (kind, body) VALUES ('memory_global', ?)",
                 (_scrub(export.global_memory.content),),
@@ -197,7 +197,7 @@ def _expected_row_count(export: Export) -> int:
     docs = sum(len(p.docs) for p in export.projects)
     proj_mems = sum(1 for p in export.projects if p.memory is not None)
     orphans = len(export.orphan_project_memories)
-    global_mem = 1 if export.global_memory.content else 0
+    global_mem = 1 if export.global_memory is not None and export.global_memory.content else 0
     return convs + msgs + projs + docs + proj_mems + orphans + global_mem
 
 

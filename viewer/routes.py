@@ -173,7 +173,7 @@ def index() -> str:
             title="Global memory",
             body=export.global_memory.content,
         )
-        if export.global_memory.content
+        if export.global_memory is not None and export.global_memory.content
         else None
     )
     return render_template(
@@ -537,7 +537,7 @@ def memory_view() -> str:
 
     memories: list[dict] = []
 
-    if export.global_memory.content:
+    if export.global_memory is not None and export.global_memory.content:
         memories.append(
             _memory_block(
                 kind="global",

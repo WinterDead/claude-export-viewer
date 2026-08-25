@@ -223,7 +223,9 @@ def create_app(
             # computation. Defensive against e.g. DB connection oddities.
             orphan_count = 0
         return {
-            "g_user_name": live_export.user.full_name,
+            # ``user`` is None when a current-format set lacks its account
+            # file (record §3) — the chrome degrades to an empty name.
+            "g_user_name": live_export.user.full_name if live_export.user is not None else "",
             "g_source_paths": list(live_export.source_paths),
             "g_orphan_count": orphan_count,
             # Re-read per request: a successful upload clears the flag

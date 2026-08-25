@@ -569,8 +569,19 @@ format (manifest + four category zips replacing the single zip) and the memory s
   guard (`tests/test_fixtures.py`, both directions); `/inspect` added to
   `test_highlighting.py`'s asset matrix; and the current-format fixture sets
   (`tests/fixtures/current/`, `current_two_part/`, `current_dangling/`) emitted by the
-  extended registry in `build_fixtures.py`. Phases 2–4 (loader/model, upload/storage,
-  rendering/copy) follow under the same brief.
+  extended registry in `build_fixtures.py`. Phase 2 shipped *(locked, except where the
+  record marks provisional)*: content-based container detection (record §2;
+  `sniff_container`/`sniff_manifest`), the sibling current-format set loader beside the
+  untouched legacy path (any subset loads, per-container required-files, dict-shaped
+  memories, `-NNN` part warnings), multi-part merge with duplicate-uuid
+  preserve-and-flag *(provisional — no multi-part export observed)*, the record §6 model
+  slots (typed `injected_prompt_block`, thinking summaries/`thinking_hidden`, tool
+  `display_content` and `output_format_category`, raw per-block timestamps, memory
+  files, login events, `Export.categories`; `user`/`global_memory` now optional for
+  subset loads) with the deliberate signature drop test-pinned end to end, dual-format
+  parametrisation of nine test families, and the aggregate-only real-data skip test
+  (`data/export-2026-08/`, Session R confirm-table counts — passing). Phases 3–4
+  (upload/storage, rendering/copy) follow under the same brief.
 
 ### Later (unscheduled, non-blocking)
 

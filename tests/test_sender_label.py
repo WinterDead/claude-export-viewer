@@ -13,8 +13,20 @@ below as exactly that control.
 from __future__ import annotations
 
 import re
+from pathlib import Path
 
+import pytest
+
+from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS
 from viewer.render import sender_label
+
+
+@pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+def export_path(request, fixtures_dir: Path) -> Path:
+    """Dual-format module (v1.3.0 Session S): export-dependent tests in this
+    file run against both container formats."""
+    return fixtures_dir / request.param
+
 
 # Conversations in tests/fixtures/synthetic_export.zip.
 CONV_MINIMAL = "00000000-0000-0000-0000-0000000000c1"

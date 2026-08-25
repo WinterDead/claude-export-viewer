@@ -13,8 +13,18 @@ Covers:
 
 from __future__ import annotations
 
-from tests.conftest import scrape_csrf
+import pytest
+
+from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS, scrape_csrf
 from viewer.tagging import all_tags, set_tag
+
+
+@pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+def export_path(request, fixtures_dir):
+    """Dual-format module (v1.3.0 Session S): export-dependent tests in this
+    file run against both container formats."""
+    return fixtures_dir / request.param
+
 
 _CONV_1 = "00000000-0000-0000-0000-0000000000c1"  # in synthetic export
 _PROJ_A = "00000000-0000-0000-0000-0000000000a1"  # in synthetic export

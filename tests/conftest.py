@@ -24,6 +24,20 @@ from viewer.parser import Export, load_export
 #: The legacy happy-path container — the suite-wide default.
 SYNTHETIC_EXPORT = "synthetic_export.zip"
 
+#: The current-format happy-path set (a directory of category zips built to
+#: be behaviourally parallel to the legacy fixture: same conversation and
+#: project UUIDs, same message counts).
+CURRENT_SET = "current"
+
+#: Parameters for modules that opt into dual-format runs by overriding
+#: ``export_path``::
+#:
+#:     @pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+#:     def export_path(request, fixtures_dir: Path) -> Path:
+#:         return fixtures_dir / request.param
+DUAL_FORMATS = (SYNTHETIC_EXPORT, CURRENT_SET)
+DUAL_FORMAT_IDS = ("legacy", "current")
+
 
 def scrape_csrf(client, page: str = "/upload") -> str:
     """Pull a valid CSRF token from the rendered form on ``page``."""

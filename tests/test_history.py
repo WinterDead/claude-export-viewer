@@ -22,7 +22,7 @@ from pathlib import Path
 import pytest
 
 from app import create_app
-from tests.conftest import SYNTHETIC_EXPORT, scrape_csrf
+from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS, SYNTHETIC_EXPORT, scrape_csrf
 from viewer.history import (
     all_history,
     export_counts,
@@ -32,6 +32,13 @@ from viewer.history import (
     record_startup_load,
 )
 from viewer.parser import load_export
+
+
+@pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+def export_path(request, fixtures_dir: Path) -> Path:
+    """Dual-format module (v1.3.0 Session S): export-dependent tests in this
+    file run against both container formats."""
+    return fixtures_dir / request.param
 
 
 @pytest.fixture

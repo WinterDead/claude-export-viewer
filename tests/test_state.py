@@ -6,11 +6,20 @@ Pure SQLite + in-memory ``Export`` construction; no Flask app context needed.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
+from tests.conftest import DUAL_FORMAT_IDS, DUAL_FORMATS
 from viewer.state import compute_tag_state, purge_orphan_tags
 from viewer.tagging import all_tags, init_db, set_tag
+
+
+@pytest.fixture(params=DUAL_FORMATS, ids=DUAL_FORMAT_IDS)
+def export_path(request, fixtures_dir: Path) -> Path:
+    """Dual-format module (v1.3.0 Session S): export-dependent tests in this
+    file run against both container formats."""
+    return fixtures_dir / request.param
 
 
 @pytest.fixture
