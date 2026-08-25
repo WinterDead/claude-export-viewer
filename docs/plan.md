@@ -447,6 +447,37 @@ operator action** — the flip itself is never performed by a session.
     shots were operator-reviewed at the phase boundary and shipped; no purpose-built
     demo fixture.
 
+## v1.3.0 — in progress
+
+Arc: new export format support, dark mode, codebase review. Renumbering note: this version
+was provisionally "1.2.6"; the operator ratified "1.3.0" in 2026-08 — a whole-archive
+format change is a minor version by this project's semver rhythm, and the reserved patch
+series keeps its role under the name "1.3.x". No version bump until the arc's close session.
+
+- **Session R, Phase 1** *(shipped)* — new-format discovery (brief:
+  `docs/briefs/v1.3.0-session-r-brief.md`; report:
+  `docs/briefs/v1.3.0-session-r-phase1-report.md`). Locked decisions and findings:
+  - `tools/scan_export_schema.py` committed: stdlib-only, aggregate-only schema profiler
+    accepting a legacy single-zip export, a manifest `.json`, or a directory holding a
+    new-format export set (any subset of category zips; multi-part grouping is structural
+    tolerance, unverified). Privacy is by construction: machine-enum allowlist with a
+    shape check, UUID masking of values and dict keys, masked placeholders elsewhere;
+    `memory_files[].path` gets a top-level-segment-only census.
+  - All nine chat-side verification targets reproduced (confirm/diverge table in the
+    Phase 1 report). Notable format facts beyond the chat-side scan: `memory_files`
+    paths are absolute-style (leading `/`); the manifest carries `version`,
+    `created_at`, `instructions`, `total_files` beyond its file list, and its
+    `batch_index` enumerates files 0–3 while `part` is 0 throughout; new block-level
+    keys (`approval_key_legacy`, `hidden`, `hidden_in_chat`, `thinking_hidden`,
+    `tool_identifier`, `tool_origin`, `citations_grouping_mode`); `meta` carries an
+    `output_format_category` enum; knowledge inner blocks gain `links`;
+    `structured_content` can be a dict (file-tool targets); the project-membership gap
+    holds in the new format (exactly the legacy seven conversation keys).
+  - `docs/export-schema.md` extended to cover both container formats, every field
+    marked (both) / (legacy only) / (current only); all examples synthetic.
+  - Open design questions recorded verbatim in the Phase 1 report for the chat design
+    record; design work deliberately out of session scope.
+
 ## Roadmap (post-v1.1)
 
 Sequenced 2026-07; supersedes the earlier "v1.2 — gate items" list. Definition of done for
@@ -498,11 +529,34 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
 - GitHub Releases created from the version tags with short changelogs; the repo flips
   public. *(pending operator action — the flip is never performed by a session.)*
 
+### v1.3.0 — new export format, dark mode, codebase review
+
+Scoped and ratified by the operator, 2026-08. Anthropic changed the export container
+format (manifest + four category zips replacing the single zip) and the memory system
+(the app's supported structure is now the Legacy Memory System; the new system exports
+`memory_files`). See `docs/export-schema.md` for both formats.
+
+- Dual-format support: parse both containers into one internal model, including the new
+  memory system (`memory_files` open-set taxonomy, `conversations_memory`,
+  `project_memories`).
+- Login history displayed (ratified *that* it displays; *how* is an open design
+  question).
+- Multi-file upload accepting any subset of the category zips with a degraded-view
+  banner; the manifest optional. **(Provisional — approved as the starting shape pending
+  the design record and operator testing.)**
+- Dark mode.
+- Dev docs excluded from the default GitHub download via `export-ignore` (streamlined
+  download, files remain browsable; no separate branch or repo). *(shipped ahead of the
+  arc — commit "Exclude development briefs from generated archives")*
+- The codebase review (Session R Phase 2) feeding the arc's implementation briefs.
+
 ### Later (unscheduled, non-blocking)
 
-- **1.2.6+ patch series (reserved — recorded prominently so it isn't forgotten between
-  work windows).** UI and flow tweaks from lived use; expected one or two releases, up to
-  four reserved before 1.3+. Currently queued: the **print timestamp toggle**
+- **1.3.x patch series (post-1.3.0) (reserved — recorded prominently so it isn't
+  forgotten between work windows).** Renamed from "1.2.6+ patch series" when the operator
+  ratified the 1.3.0 renumbering, 2026-08 — contents unchanged, all items remain deferred
+  out of v1.3.0. UI and flow tweaks from lived use; expected one or two releases.
+  Currently queued: the **print timestamp toggle**
   (None / Absolute / Relative — None shipped as Session N's fixed default), the
   **link-appendix mode toggle** (appendix / inline URLs / none — appendix shipped as the
   fixed default), and the **summary-placement toggle** (body-level control over where the
@@ -522,6 +576,8 @@ Theme: a clean, public-safe base. Closes exactly as scoped.
   message's advice can appear not to work; consider probing the launcher's full list
   (`py -0p`) or versioned qualifiers before declaring "too old", or mentioning the pin
   possibility in the message.
+
+### 1.4+ (unscheduled)
 
 Order between the two larger items below is undecided until development resumes; the
 current lean is portable tag state first.
