@@ -34,17 +34,17 @@
       <a href="{{ link.url }}">{{ link.title or link.url }}</a>
     </div>
   {% elif dc.type == 'rich_content' %}
-    <details class="display-content display-content-json">
+    <details class="collapsible display-content display-content-json">
       <summary>rich_content</summary>
       <pre>{{ dc.content | pretty_json }}</pre>
     </details>
   {% elif dc.type == 'json_block' %}
-    <details class="display-content display-content-json">
+    <details class="collapsible display-content display-content-json">
       <summary>json_block</summary>
       <pre>{{ dc.json_block }}</pre>
     </details>
   {% else %}
-    <details class="display-content display-content-json">
+    <details class="collapsible display-content display-content-json">
       <summary>{{ dc.type }}</summary>
       <pre>{{ dc | pretty_json }}</pre>
     </details>
@@ -82,7 +82,7 @@
           </div>
         {% endif %}
       {% elif bt == 'thinking' %}
-        <details class="thinking">
+        <details class="collapsible thinking">
           <summary>
             {% if block.summaries %}
               {{ block.summaries[0] }}
@@ -137,7 +137,7 @@
         </aside>
       {% elif bt == 'injected_prompt' %}
         {# Record §9.1: a labelled collapsible card, collapsed by default. #}
-        <details class="injected-prompt">
+        <details class="collapsible injected-prompt">
           <summary>Injected prompt</summary>
           <div class="markdown-body injected-prompt-body">{{ block.prompt | markdown }}</div>
         </details>
@@ -154,7 +154,7 @@
     {% endfor %}
 
     {% if msg.attachments %}
-      <details class="attachments">
+      <details class="collapsible attachments">
         <summary>
           {{ msg.attachments | length }}
           attachment{% if msg.attachments | length != 1 %}s{% endif %}

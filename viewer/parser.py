@@ -59,6 +59,23 @@ class ExportFormatError(Exception):
     """Raised when an export archive's structure is incompatible with this parser."""
 
 
+class MixedContainerError(ExportFormatError):
+    """A submission mixed a legacy archive with current-format category files.
+
+    Refused by design (record §2): the record defines no semantics for the
+    mix because no real export produces one. The exception message names the
+    offending files for logs; the routes render the Appendix C11 copy
+    (:data:`MIXED_CONTAINER_MESSAGE`) instead.
+    """
+
+
+# Appendix C11 — the user-facing form both routes render for a mixed submission.
+MIXED_CONTAINER_MESSAGE = (
+    "Legacy and current-format export files can't be loaded together — "
+    "upload one export's files at a time."
+)
+
+
 # ---------------------------------------------------------------------------
 # Typed records — see plan §3 for the data-model contract.
 # ---------------------------------------------------------------------------
@@ -348,7 +365,7 @@ def load_export(source: str | Path | Sequence[str | Path]) -> Export:
     if current:
         others = [p for p in paths if kinds[p] not in ALL_CATEGORIES]
         if others:
-            raise ExportFormatError(
+            raise MixedContainerError(
                 "cannot mix current-format category archives with other archives "
                 f"in one load: {', '.join(p.name for p in others)}"
             )
@@ -411,7 +428,7 @@ def load_export_from_bytes_set(files: Sequence[tuple[str, bytes]]) -> Export:
     if any(kind in ALL_CATEGORIES for kind, _zf, _name in parts):
         others = [name for kind, _zf, name in parts if kind not in ALL_CATEGORIES]
         if others:
-            raise ExportFormatError(
+            raise MixedContainerError(
                 "cannot mix current-format category archives with other archives "
                 f"in one load: {', '.join(others)}"
             )
@@ -499,6 +516,32 @@ def manifest_file_count(data: bytes) -> int | None:
         return None
     data_files = parsed.get("data_files")
     return len(data_files) if isinstance(data_files, list) else None
+
+
+def manifest_part_map(data: bytes) -> dict[str, int]:
+    """``filename → part`` from a manifest's ``data_files`` entries.
+
+    Part order is metadata only the manifest and the filename carry (record
+    §4) — this is the manifest half, feeding the routes' same-category part
+    grouping. Entries without a string ``filename`` and an integer ``part``
+    are skipped; anything that isn't a manifest yields an empty map.
+    """
+    try:
+        parsed = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return {}
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data_files"), list):
+        return {}
+    out: dict[str, int] = {}
+    for entry in parsed["data_files"]:
+        if (
+            isinstance(entry, dict)
+            and isinstance(entry.get("filename"), str)
+            and isinstance(entry.get("part"), int)
+            and not isinstance(entry.get("part"), bool)
+        ):
+            out[entry["filename"]] = entry["part"]
+    return out
 
 
 def _open_zip(path: Path) -> tuple[zipfile.ZipFile, set[str]]:

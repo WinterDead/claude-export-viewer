@@ -225,6 +225,116 @@ def test_duplicate_category_last_file_wins_with_warning(
     assert len(flask_app.config["EXPORT"].conversations) == 4  # the full part, not part 0
 
 
+def test_mixed_containers_refused_with_c11_message(app_factory, fixtures_dir: Path) -> None:
+    """Record §2 (Session T amendment): a legacy archive plus current-format
+    category files in one submission is refused by design; both routes
+    render the Appendix C11 copy and the loaded export is untouched."""
+    import html as html_mod
+
+    from viewer.parser import MIXED_CONTAINER_MESSAGE
+
+    flask_app = app_factory()
+    client = flask_app.test_client()
+    legacy = (fixtures_dir / SYNTHETIC_EXPORT).read_bytes()
+    category = (fixtures_dir / "current" / "conversations-000.zip").read_bytes()
+    before = flask_app.config["EXPORT"]
+
+    for page in ("/upload", "/inspect"):
+        r = _post_files(client, page, [("legacy.zip", legacy), ("conversations-000.zip", category)])
+        assert r.status_code == 400, page
+        assert MIXED_CONTAINER_MESSAGE in html_mod.unescape(r.get_data(as_text=True)), page
+        assert flask_app.config["EXPORT"] is before, page
+
+
+def test_two_parts_merge_in_suffix_order_supplied_out_of_order(
+    app_factory, fixtures_dir: Path, tmp_path
+) -> None:
+    """Record §4 (Session T amendment): same-category files with distinct
+    ``-NNN`` suffixes are parts — deliberately supplied out of order, they
+    merge in part order (part 0's copy of the duplicated conversation wins)
+    and the history row carries the part multiplicity (copy C3)."""
+    flask_app = app_factory()
+    client = flask_app.test_client()
+    two_part = fixtures_dir / "current_two_part"
+    p0 = (two_part / "conversations-000.zip").read_bytes()
+    p1 = (two_part / "conversations-001.zip").read_bytes()
+
+    r = _post_files(
+        client, "/upload", [("conversations-001.zip", p1), ("conversations-000.zip", p0)]
+    )
+    assert r.status_code == 302
+
+    active_set: Path = flask_app.config["ACTIVE_SET_PATH"]
+    assert {p.name for p in active_set.iterdir()} == {
+        "conversations-000.zip",
+        "conversations-001.zip",
+    }
+    export = flask_app.config["EXPORT"]
+    assert len(export.conversations) == 4
+    minimal = next(c for c in export.conversations if c.uuid.endswith("c1"))
+    assert minimal.title == "Synthetic minimal conversation"  # part 0's copy won
+
+    rows = _history_rows(tmp_path / "cache" / "viewer.sqlite")
+    assert rows[-1][1] == "2 files: conversations ×2"
+
+
+def test_two_parts_merge_in_manifest_order(app_factory, fixtures_dir: Path, tmp_path) -> None:
+    """Record §4 (Session T amendment): the manifest's part numbers outrank
+    filename suffixes — with suffixes deliberately contradicting the
+    manifest, the manifest's order decides which duplicate copy wins."""
+    import json
+
+    flask_app = app_factory()
+    client = flask_app.test_client()
+    two_part = fixtures_dir / "current_two_part"
+    part0 = (two_part / "conversations-000.zip").read_bytes()
+    part1 = (two_part / "conversations-001.zip").read_bytes()
+    # The names are swapped relative to their content, so suffix order would
+    # merge part 1 first; the manifest says otherwise and must win.
+    manifest = json.dumps(
+        {
+            "data_files": [
+                {"category": "conversations", "part": 0, "filename": "conversations-001.zip"},
+                {"category": "conversations", "part": 1, "filename": "conversations-000.zip"},
+            ]
+        }
+    ).encode("utf-8")
+
+    r = _post_files(
+        client,
+        "/upload",
+        [
+            ("conversations-000.zip", part1),
+            ("conversations-001.zip", part0),
+            ("manifest.json", manifest),
+        ],
+    )
+    assert r.status_code == 302
+    export = flask_app.config["EXPORT"]
+    assert len(export.conversations) == 4
+    minimal = next(c for c in export.conversations if c.uuid.endswith("c1"))
+    assert minimal.title == "Synthetic minimal conversation"  # manifest part 0 won
+
+    rows = _history_rows(tmp_path / "cache" / "viewer.sqlite")
+    assert rows[-1][1] == "3 files: conversations ×2, manifest"
+
+
+def test_inspect_two_parts_shows_multiplicity_banner(app_factory, fixtures_dir: Path) -> None:
+    """The inspect banner's set summary carries the ×N part multiplier
+    (copy C3); parts group through the same rules as Upload."""
+    flask_app = app_factory()
+    client = flask_app.test_client()
+    two_part = fixtures_dir / "current_two_part"
+    files = [
+        ("conversations-001.zip", (two_part / "conversations-001.zip").read_bytes()),
+        ("conversations-000.zip", (two_part / "conversations-000.zip").read_bytes()),
+    ]
+    r = _post_files(client, "/inspect", files)
+    assert r.status_code == 302
+    body = client.get("/").get_data(as_text=True)
+    assert "Inspecting 2 files: conversations ×2 — read-only." in body
+
+
 def test_legacy_zip_upload_is_a_set_of_one(app_factory, fixtures_dir: Path, tmp_path) -> None:
     """Continuity (record §5): a legacy archive keeps its filename in the
     history row and its plain SHA-256 as the fingerprint."""
@@ -466,9 +576,25 @@ def test_corrupt_stored_set_falls_through_with_banner(
 
 
 def test_summarise_set_shapes() -> None:
-    assert summarise_set({"legacy": "my-export.zip"}) == "my-export.zip"
-    assert summarise_set({"conversations": "a.zip"}) == "1 file: conversations"
+    assert summarise_set({"legacy": ["my-export.zip"]}) == "my-export.zip"
+    assert summarise_set({"conversations": ["a.zip"]}) == "1 file: conversations"
     assert (
-        summarise_set({"manifest": "m.json", "memories": "b.zip", "conversations": "a.zip"})
+        summarise_set({"manifest": ["m.json"], "memories": ["b.zip"], "conversations": ["a.zip"]})
         == "3 files: conversations, memories, manifest"
+    )
+
+
+def test_summarise_set_part_multiplicity() -> None:
+    """Copy C3 (record §4): a category supplied as N parts appears once with
+    a multiplier, counted per file in the total."""
+    assert (
+        summarise_set(
+            {
+                "conversations": ["conversations-000.zip", "conversations-001.zip"],
+                "projects": ["projects-000.zip"],
+                "memories": ["memories-000.zip"],
+                "light_metadata": ["light_metadata-000.zip"],
+            }
+        )
+        == "5 files: conversations ×2, projects, memories, light_metadata"
     )

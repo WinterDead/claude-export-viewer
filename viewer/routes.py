@@ -15,6 +15,7 @@ from __future__ import annotations
 import io
 import logging
 import os
+import re
 import shutil
 import zipfile
 from datetime import date
@@ -45,13 +46,16 @@ from viewer.inspect import begin_inspection, end_inspection, get_inspection
 from viewer.parser import (
     ALL_CATEGORIES,
     CONTAINER_LEGACY,
+    MIXED_CONTAINER_MESSAGE,
     Conversation,
     Export,
     ExportFormatError,
+    MixedContainerError,
     Project,
     load_export,
     load_export_from_bytes_set,
     manifest_file_count,
+    manifest_part_map,
     sniff_container,
     sniff_manifest,
 )
@@ -890,29 +894,57 @@ def _sniff_staged_file(path: Path, filename: str) -> str | None:
         return None
 
 
-def summarise_set(slotted: dict[str, str]) -> str:
+# Part suffix in current-format filenames (record §4): part order is
+# metadata only the manifest and the filename carry.
+_PART_SUFFIX_RE = re.compile(r"-(\d{3})\.zip$", re.IGNORECASE)
+
+
+def _part_order(names: list[str], manifest_parts: dict[str, int]) -> list[int] | None:
+    """Indices ordering same-category files as parts (record §4): by the
+    manifest's part numbers when it assigns every name a distinct one,
+    failing that by distinct ``-NNN`` filename suffixes. ``None`` when the
+    files aren't distinguishable as parts (the last-wins guard applies)."""
+    suffix_keys: list[int | None] = []
+    for n in names:
+        m = _PART_SUFFIX_RE.search(n)
+        suffix_keys.append(int(m.group(1)) if m else None)
+    for keys in ([manifest_parts.get(n) for n in names], suffix_keys):
+        if all(k is not None for k in keys) and len(set(keys)) == len(keys):
+            return sorted(range(len(names)), key=keys.__getitem__)
+    return None
+
+
+def summarise_set(slotted: dict[str, list[str]]) -> str:
     """The history/banner display name for a loaded set (record §5):
-    ``kind → filename``. A lone legacy archive keeps its filename —
-    continuity with pre-set history rows; anything else summarises, e.g.
-    ``3 files: conversations, projects, memories``."""
-    if set(slotted) == {CONTAINER_LEGACY}:
-        return slotted[CONTAINER_LEGACY]
+    ``kind → filenames``. A lone legacy archive keeps its filename —
+    continuity with pre-set history rows; anything else summarises, with a
+    part multiplier where a category was supplied as parts (record §4, copy
+    C3), e.g. ``5 files: conversations ×2, projects, memories,
+    light_metadata``."""
+    if set(slotted) == {CONTAINER_LEGACY} and len(slotted[CONTAINER_LEGACY]) == 1:
+        return slotted[CONTAINER_LEGACY][0]
     order = [*ALL_CATEGORIES, CONTAINER_LEGACY, _MANIFEST_KIND]
-    parts = [k for k in order if k in slotted]
-    n = len(parts)
-    return f"{n} file{'s' if n != 1 else ''}: {', '.join(parts)}"
+    parts: list[str] = []
+    total = 0
+    for k in order:
+        names = slotted.get(k)
+        if not names:
+            continue
+        total += len(names)
+        parts.append(f"{k} ×{len(names)}" if len(names) > 1 else k)
+    return f"{total} file{'s' if total != 1 else ''}: {', '.join(parts)}"
 
 
 def summarise_set_dir(set_dir: Path) -> str:
     """:func:`summarise_set` over a stored set directory — the startup-load
     twin of the upload path's summary."""
-    slotted: dict[str, str] = {}
+    slotted: dict[str, list[str]] = {}
     for p in sorted(set_dir.iterdir()):
         if not p.is_file():
             continue
         kind = _sniff_staged_file(p, p.name)
         if kind is not None:
-            slotted[kind] = p.name
+            slotted.setdefault(kind, []).append(p.name)
     return summarise_set(slotted) if slotted else set_dir.name
 
 
@@ -952,7 +984,7 @@ def upload_post():
     stage.mkdir()
 
     try:
-        slotted: dict[str, tuple[Path, str]] = {}
+        slotted: dict[str, list[tuple[Path, str]]] = {}
         for f in files:
             basename = Path(f.filename).name
             dest = stage / basename
@@ -968,18 +1000,37 @@ def upload_post():
             kind = _sniff_staged_file(dest, basename)
             if kind is None:
                 return _upload_error(f"{basename} isn't a recognised export file.")
-            if kind in slotted:
-                # Duplicate category in one submission: last file wins, with
-                # a warning (record §4).
-                prev_path, prev_name = slotted[kind]
-                logger.warning(
-                    "duplicate %s file in one upload: %s replaces %s", kind, basename, prev_name
-                )
-                if prev_path != dest:
-                    prev_path.unlink(missing_ok=True)
-            slotted[kind] = (dest, basename)
+            slotted.setdefault(kind, []).append((dest, basename))
 
-        zip_paths = [p for kind, (p, _n) in slotted.items() if kind != _MANIFEST_KIND]
+        # Same-category files: distinguishable parts merge in part order
+        # through the loader's §3 multi-part merge; otherwise last file
+        # wins, with a warning — the accidental double-pick guard (record §4).
+        manifest_parts: dict[str, int] = {}
+        if _MANIFEST_KIND in slotted:
+            manifest_parts = manifest_part_map(slotted[_MANIFEST_KIND][-1][0].read_bytes())
+        for kind, entries in slotted.items():
+            if len(entries) < 2:
+                continue
+            order = (
+                None
+                if kind == _MANIFEST_KIND
+                else _part_order([n for _p, n in entries], manifest_parts)
+            )
+            if order is not None:
+                slotted[kind] = [entries[i] for i in order]
+                continue
+            *earlier, last = entries
+            for prev_path, prev_name in earlier:
+                logger.warning(
+                    "duplicate %s file in one upload: %s replaces %s", kind, last[1], prev_name
+                )
+                if prev_path != last[0]:
+                    prev_path.unlink(missing_ok=True)
+            slotted[kind] = [last]
+
+        zip_paths = [
+            p for kind in (*ALL_CATEGORIES, CONTAINER_LEGACY) for p, _n in slotted.get(kind, [])
+        ]
         if not zip_paths:
             return _upload_error(
                 "The manifest alone doesn't contain your data — include the export "
@@ -990,7 +1041,9 @@ def upload_post():
         # malformed set surfaces as a friendly message and the previous
         # export stays in place.
         try:
-            new_export = load_export(sorted(zip_paths))
+            new_export = load_export(zip_paths)
+        except MixedContainerError:
+            return _upload_error(MIXED_CONTAINER_MESSAGE)
         except ExportFormatError as e:
             return _upload_error(f"Couldn't parse archive: {e}")
 
@@ -1032,7 +1085,9 @@ def upload_post():
     record_load(
         db,
         source="upload",
-        filename=summarise_set({kind: name for kind, (_p, name) in slotted.items()}),
+        filename=summarise_set(
+            {kind: [n for _p, n in entries] for kind, entries in slotted.items()}
+        ),
         zip_sha256=new_fingerprint,
         export=new_export,
     )
@@ -1096,7 +1151,7 @@ def inspect_post():
         if not f.filename.lower().endswith((".zip", ".json")):
             return _inspect_error("Files must be .zip archives or a manifest .json.")
 
-    slotted: dict[str, tuple[str, bytes]] = {}
+    slotted: dict[str, list[tuple[str, bytes]]] = {}
     for f in files:
         basename = Path(f.filename).name
         data = f.stream.read(UPLOAD_MAX_BYTES + 1)
@@ -1114,16 +1169,36 @@ def inspect_post():
                 kind = None
         if kind is None:
             return _inspect_error(f"{basename} isn't a recognised export file.")
-        if kind in slotted:
-            logger.warning(
-                "duplicate %s file in one inspection: %s replaces %s",
-                kind,
-                basename,
-                slotted[kind][0],
-            )
-        slotted[kind] = (basename, data)
+        slotted.setdefault(kind, []).append((basename, data))
 
-    zips = [(name, data) for kind, (name, data) in slotted.items() if kind != _MANIFEST_KIND]
+    # Same rules as Upload (record §4): distinguishable parts keep their
+    # part order for the loader's merge; otherwise last file wins.
+    manifest_parts: dict[str, int] = {}
+    if _MANIFEST_KIND in slotted:
+        manifest_parts = manifest_part_map(slotted[_MANIFEST_KIND][-1][1])
+    for kind, entries in slotted.items():
+        if len(entries) < 2:
+            continue
+        order = (
+            None
+            if kind == _MANIFEST_KIND
+            else _part_order([n for n, _d in entries], manifest_parts)
+        )
+        if order is not None:
+            slotted[kind] = [entries[i] for i in order]
+            continue
+        *earlier, last = entries
+        for prev_name, _d in earlier:
+            logger.warning(
+                "duplicate %s file in one inspection: %s replaces %s", kind, last[0], prev_name
+            )
+        slotted[kind] = [last]
+
+    zips = [
+        (name, data)
+        for kind in (*ALL_CATEGORIES, CONTAINER_LEGACY)
+        for name, data in slotted.get(kind, [])
+    ]
     if not zips:
         return _inspect_error(
             "The manifest alone doesn't contain your data — include the export "
@@ -1131,17 +1206,19 @@ def inspect_post():
         )
 
     try:
-        export = load_export_from_bytes_set(sorted(zips))
+        export = load_export_from_bytes_set(zips)
+    except MixedContainerError:
+        return _inspect_error(MIXED_CONTAINER_MESSAGE)
     except ExportFormatError as e:
         return _inspect_error(f"Couldn't parse archive: {e}")
 
     manifest_status: tuple[int, int] | None = None
     if _MANIFEST_KIND in slotted:
-        m = manifest_file_count(slotted[_MANIFEST_KIND][1])
+        m = manifest_file_count(slotted[_MANIFEST_KIND][-1][1])
         if m is not None:
             manifest_status = (m, len(zips))
 
-    display = summarise_set({kind: name for kind, (name, _d) in slotted.items()})
+    display = summarise_set({kind: [n for n, _d in entries] for kind, entries in slotted.items()})
     begin_inspection(current_app, export, display, manifest_status=manifest_status)
     return redirect(url_for("viewer.index"))
 

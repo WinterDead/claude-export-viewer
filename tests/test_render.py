@@ -340,6 +340,16 @@ def test_relative_hours_and_days() -> None:
     assert format_local_relative(now - timedelta(days=2), now=now) == "2 days ago"
 
 
+def test_relative_stays_relative_past_a_day() -> None:
+    """The History "When" column never switches to an absolute date: past a
+    day the string coarsens through days, months, and years, always relative
+    (the absolute timestamp is the hover tooltip)."""
+    now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
+    assert format_local_relative(now - timedelta(hours=25), now=now) == "1 day ago"
+    assert format_local_relative(now - timedelta(days=40), now=now) == "1 month ago"
+    assert format_local_relative(now - timedelta(days=400), now=now) == "1 year ago"
+
+
 def test_relative_future() -> None:
     now = datetime(2026, 4, 5, 12, 0, 0, tzinfo=UTC)
     assert format_local_relative(now + timedelta(hours=2), now=now) == "in 2 hours"

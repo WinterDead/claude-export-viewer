@@ -552,8 +552,8 @@ format (manifest + four category zips replacing the single zip) and the memory s
 - Login history displayed (ratified *that* it displays; *how* is an open design
   question).
 - Multi-file upload accepting any subset of the category zips with a degraded-view
-  banner; the manifest optional. **(Provisional — approved as the starting shape pending
-  the design record and operator testing.)**
+  banner; the manifest optional. **(Cleared by the operator hand-test of 2026-09-01 —
+  report: `docs/briefs/v1.3.0-session-s-operator-hand-test-report.md`.)**
 - Dark mode.
 - Development briefs excluded from the default GitHub download via `export-ignore`
   (streamlined download, files remain browsable; no separate branch or repo). *(Shipped
@@ -581,8 +581,9 @@ format (manifest + four category zips replacing the single zip) and the memory s
   subset loads) with the deliberate signature drop test-pinned end to end, dual-format
   parametrisation of nine test families, and the aggregate-only real-data skip test
   (`data/export-2026-08/`, Session R confirm-table counts — passing). Phase 3 shipped
-  *(provisional where the record marks the upload shape provisional — operator testing
-  still gates it)*: multi-file upload and inspect (one picker for category zips plus the
+  *(upload shape cleared by the operator hand-test of 2026-09-01; the §3 multi-part
+  merge stays provisional until a real multi-part export is observed)*: multi-file
+  upload and inspect (one picker for category zips plus the
   optional manifest, content sniff-and-slot, duplicate-category last-wins with a logged
   warning, atomic stage-parse-swap generalised to sets); set storage under
   `cache/active_export/` with the pre-set `active_export.zip` still picked up by
@@ -603,8 +604,9 @@ format (manifest + four category zips replacing the single zip) and the memory s
   C6, and C9 verbatim plus drafted Memory/Account/getting-your-export/backups passages
   flagged for operator review; README "Getting your export" replaced with C8; and the
   operator hand-test brief committed
-  (`docs/briefs/v1.3.0-session-s-operator-hand-test.md`) — its results are what clears
-  the upload shape's *provisional* markers. Session T (dark mode, README polish,
+  (`docs/briefs/v1.3.0-session-s-operator-hand-test.md`) — its results
+  (`…-operator-hand-test-report.md`, filed 2026-09-01) cleared the upload shape's
+  *provisional* markers in Session T. Session T (dark mode, README polish,
   screenshots, release) closes the arc.
 
 ### Later (unscheduled, non-blocking)

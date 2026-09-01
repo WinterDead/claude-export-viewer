@@ -754,6 +754,15 @@ section h2 {
   margin-top: 0.6rem;
 }
 
+/* One collapsible contract for the reading view (Session T): every block
+   that collapses — thinking, injected-prompt, display-content JSON
+   fallbacks, attachments — is a native <details class="collapsible"> with a
+   first-child <summary>. This rule carries the shared behaviour; the skins
+   below only style each kind. */
+details.collapsible > summary {
+  cursor: pointer;
+}
+
 /* Thinking blocks */
 
 .thinking {
@@ -764,7 +773,6 @@ section h2 {
 }
 
 .thinking > summary {
-  cursor: pointer;
   color: var(--muted);
   font-size: 0.9rem;
 }
@@ -863,7 +871,6 @@ section h2 {
 }
 
 .display-content-json > summary {
-  cursor: pointer;
   color: var(--muted);
   font-size: 0.85rem;
 }
@@ -887,7 +894,6 @@ section h2 {
 }
 
 .injected-prompt > summary {
-  cursor: pointer;
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -948,7 +954,6 @@ section h2 {
 }
 
 .attachments > summary {
-  cursor: pointer;
   font-size: 0.92rem;
 }
 

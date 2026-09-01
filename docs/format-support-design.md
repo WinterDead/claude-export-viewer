@@ -45,6 +45,10 @@ The manifest's `export_url` values are live signed links. The viewer **never fet
 them** — the manifest is metadata for the banner (§4) and nothing more — and the help page
 carries a safety note telling users not to share or commit their manifest (Appendix, C2).
 
+Mixed submissions are refused by design. A load that combines a legacy archive with
+current-format category files raises a format error; the record defines no semantics for
+the mix because no real export produces one. The user-facing message is Appendix C11.
+
 ## 3. Loading and assembly
 
 - A **sibling current-format loader** beside the legacy `_parse_zip` path, sharing the
@@ -68,10 +72,16 @@ carries a safety note telling users not to share or commit their manifest (Appen
 
 - **One multi-file input** on both Upload and Inspect: accepts `.zip` files and a manifest
   `.json`, any subset, any order. Each file is sniffed per §2 and slotted into its
-  category. Duplicate categories in one submission: last file wins, with a warning.
+  category. Same-category files in one submission are first tested as parts: when the
+  manifest (if supplied) assigns them distinct part numbers, or failing that when their
+  filenames carry distinct -NNN part suffixes, they merge in part order through the §3
+  multi-part merge — content still decides what each file is; part order is metadata only
+  the manifest and the filename carry. Same-category files not distinguishable as parts:
+  last file wins, with a warning (the accidental double-pick guard). Provisional, with
+  §3, until a real multi-part export is observed.
 - **Atomic set swap**, generalising parse-before-replace: stage the supplied set, parse
   the set, and only on success swap it in as the active export.
-- **Degraded-view banner** (*provisional as part of the upload shape*): a persistent
+- **Degraded-view banner** (cleared by the operator hand-test of 2026-09-01): a persistent
   banner whenever the active set is missing categories, using the copy in Appendix C1.
   When a manifest was supplied, the banner also states expected-vs-supplied counts.
 - **Upload cap: 200 MB per file** (was: per upload). The constant is promoted to a
@@ -197,7 +207,9 @@ reset, per the Session R Phase 2 report).
 Queued to **1.3.x** (the patch series): inline citation anchoring; bespoke
 `rich_content`/`json_block` rendering; knowledge `links` rendering; structured
 frontmatter presentation for memory files; plus the pre-existing queue (toggles, launcher
-polish, embedded-HTML policy, bare-URL autolinking).
+polish, embedded-HTML policy, bare-URL autolinking — the operator hand-test of 2026-09-01
+observed exactly this: links in replies render as plain text, the deferred behaviour, not
+a defect).
 
 Queued to **1.4+**: incremental/streaming parse ("large-archive posture") — removes the
 parse-memory scaling that the upload cap currently guards, triggered if real users report
@@ -263,3 +275,6 @@ a single legacy ZIP. You can load a partial set; a banner will tell you what's m
 and which features are affected.` (Followed by C2 and C6.)
 
 **C10 — sources list heading (text-block citations).** `Sources`
+
+**C11 — mixed-container error.** `Legacy and current-format export files can't be loaded
+together — upload one export's files at a time.`

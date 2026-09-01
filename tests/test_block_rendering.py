@@ -45,13 +45,35 @@ def tools_page(client) -> str:
 
 def test_injected_prompt_renders_as_collapsed_card(client) -> None:
     body = client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
-    m = re.search(r'<details class="injected-prompt"[^>]*>', body)
+    m = re.search(r'<details class="collapsible injected-prompt"[^>]*>', body)
     assert m, "injected prompt card missing"
     assert " open" not in m.group(0)
     assert "<summary>Injected prompt</summary>" in body
     assert "Synthetic injected instruction text from a product feature." in body
     # No unknown-block placeholder for the now-typed block.
     assert "block-unknown" not in body
+
+
+def test_reading_view_collapsibles_share_one_contract(client) -> None:
+    """Session T (hand-test scenario 5 follow-up): every reading-view
+    <details> — thinking, injected-prompt, display-content fallbacks,
+    attachments — sits on the one shared mechanism: a native
+    ``<details class="collapsible …">`` whose first child is a ``<summary>``,
+    with no ``open`` attribute. One contract, not parallel ones."""
+    for conv in (CONV_MINIMAL, CONV_TOOLS):
+        body = client.get(f"/conversations/{conv}").get_data(as_text=True)
+        tags = re.findall(r"<details[^>]*>", body)
+        assert tags, f"no collapsibles rendered for {conv}"
+        for tag in tags:
+            assert 'class="collapsible ' in tag, f"off-contract details tag: {tag}"
+            assert " open" not in tag, f"pre-opened details tag: {tag}"
+        # Each details opens with its summary — the toggle every browser wires.
+        assert len(re.findall(r"<details[^>]*>\s*<summary", body)) == len(tags)
+    # The two kinds the hand-test exercised are both on the contract.
+    tools_body = client.get(f"/conversations/{CONV_TOOLS}").get_data(as_text=True)
+    minimal_body = client.get(f"/conversations/{CONV_MINIMAL}").get_data(as_text=True)
+    assert '<details class="collapsible thinking">' in tools_body
+    assert '<details class="collapsible injected-prompt">' in minimal_body
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +165,8 @@ def test_display_content_rich_link(tools_page: str) -> None:
 
 def test_display_content_json_block_collapsed_preformatted(tools_page: str) -> None:
     m = re.search(
-        r'<details class="display-content display-content-json">\s*<summary>json_block</summary>'
+        r'<details class="collapsible display-content display-content-json">'
+        r"\s*<summary>json_block</summary>"
         r"\s*<pre>(.*?)</pre>",
         tools_page,
         re.S,
@@ -154,8 +177,8 @@ def test_display_content_json_block_collapsed_preformatted(tools_page: str) -> N
 
 def test_display_content_rich_content_collapsed_preformatted(tools_page: str) -> None:
     m = re.search(
-        r'<details class="display-content display-content-json">\s*<summary>rich_content'
-        r"</summary>\s*<pre>(.*?)</pre>",
+        r'<details class="collapsible display-content display-content-json">'
+        r"\s*<summary>rich_content</summary>\s*<pre>(.*?)</pre>",
         tools_page,
         re.S,
     )
