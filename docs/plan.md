@@ -447,12 +447,13 @@ operator action** — the flip itself is never performed by a session.
     shots were operator-reviewed at the phase boundary and shipped; no purpose-built
     demo fixture.
 
-## v1.3.0 — in progress
+## v1.3.0 — shipped (arc closed by Session T, 2026-09-01; tagged `v1.3.0`)
 
 Arc: new export format support, dark mode, codebase review. Renumbering note: this version
 was provisionally "1.2.6"; the operator ratified "1.3.0" in 2026-08 — a whole-archive
 format change is a minor version by this project's semver rhythm, and the reserved patch
-series keeps its role under the name "1.3.x". No version bump until the arc's close session.
+series keeps its role under the name "1.3.x". The bump and tag landed with the close
+commit after the operator's staged review.
 
 - **Session R, Phase 1** *(shipped)* — new-format discovery (brief:
   `docs/briefs/v1.3.0-session-r-brief.md`; report:
@@ -554,13 +555,13 @@ format (manifest + four category zips replacing the single zip) and the memory s
 - Multi-file upload accepting any subset of the category zips with a degraded-view
   banner; the manifest optional. **(Cleared by the operator hand-test of 2026-09-01 —
   report: `docs/briefs/v1.3.0-session-s-operator-hand-test-report.md`.)**
-- Dark mode.
+- Dark mode. *(Shipped — Session T Phase 2, locked decisions below.)*
 - Development briefs excluded from the default GitHub download via `export-ignore`
   (streamlined download, files remain browsable; no separate branch or repo). *(Shipped
   ahead of the arc — commit "Exclude development briefs from generated archives" covers
   `docs/briefs/**`; the briefs-only scope was ratified with the Session S brief.)*
 - The codebase review (Session R Phase 2) feeding the arc's implementation briefs.
-- **Session S (implementation, in progress).** `docs/format-support-design.md` (ratified
+- **Session S (implementation)** *(shipped)*. `docs/format-support-design.md` (ratified
   2026-08-25) is the arc's normative design record, committed verbatim at the session's
   open. Phase 1 shipped *(locked)*: conftest consolidation — shared `export_path` /
   `export` / `app` / `client` / `app_factory` fixtures and one CSRF scraper in
@@ -606,8 +607,37 @@ format (manifest + four category zips replacing the single zip) and the memory s
   operator hand-test brief committed
   (`docs/briefs/v1.3.0-session-s-operator-hand-test.md`) — its results
   (`…-operator-hand-test-report.md`, filed 2026-09-01) cleared the upload shape's
-  *provisional* markers in Session T. Session T (dark mode, README polish,
-  screenshots, release) closes the arc.
+  *provisional* markers in Session T.
+- **Session T (arc close: fixes, dark mode, docs, release)** *(shipped)* — brief and
+  per-phase reports in `docs/briefs/`. Locked decisions:
+  - Hand-test follow-through: the report filed verbatim as the session's first commit;
+    the scenario-5 injected-prompt FAIL did not reproduce on current code (template,
+    CSS, JS, and live behaviour verified individually in Chromium and Firefox against
+    the real page); the directed hardening shipped anyway — one shared `collapsible`
+    contract across every reading-view `<details>`, test-pinned. The hand-test brief
+    corrected in place (reset now moves `data\` aside; the History When column is
+    always relative with the absolute timestamp as tooltip, threshold forms pinned).
+  - Record amendments A1–A4 applied with their code: mixed containers refused by
+    design with the C11 copy rendered on both routes (`MixedContainerError`);
+    route-level same-category part grouping (manifest part numbers first, then
+    distinct `-NNN` suffixes, otherwise last-wins-with-warning) feeding the §3 merge
+    in part order; set summaries carry `×N` part multiplicity (C3). Multi-part stays
+    provisional with §3 until a real multi-part export is observed.
+  - Dark mode per the ratified design: `viewer_theme` cookie (system/light/dark, one
+    year, HttpOnly), theme class server-rendered on `<html>` (no flash, no
+    localStorage), the palette fully tokenised (27 custom properties, light values
+    byte-equal to the replaced literals, all four banner colourways included),
+    `github-dark.min.css` vendored from the same 11.11.1 cdn-release with
+    media-attribute routing, print locked to light by an in-`@media print` token
+    reset — the identical-dark-blocks and print-coverage contracts are test-pinned.
+  - Docs and release: README intro (C6) and feature bullets (C7); help gains
+    `Appearance` (C5) and the redrafted reading-view block list; all seven
+    screenshots from the synthetic fixture via isolated instances (four retaken,
+    Memory/Account/dark-conversation new), footer and theme control suppressed at
+    capture, operator-reviewed at the close hard stop; release notes at
+    `docs/briefs/v1.3.0-release-notes.md` (C8 verbatim) for the operator's GitHub
+    Release; release audit — `pip-audit` in a scratch venv, the arc-wide
+    stranger-read sweep, and the R Phase 2 eight-claim table fully closed.
 
 ### Later (unscheduled, non-blocking)
 
@@ -620,8 +650,12 @@ format (manifest + four category zips replacing the single zip) and the memory s
   **link-appendix mode toggle** (appendix / inline URLs / none — appendix shipped as the
   fixed default), and the **summary-placement toggle** (body-level control over where the
   conversation summary appears — metadata-only shipped as Session O's fixed resolution:
-  frontmatter when present, so Copy omits it and Print keeps showing it), plus whatever
-  lived use surfaces.
+  frontmatter when present, so Copy omits it and Print keeps showing it); from the
+  v1.3.0 arc (record §11): **bare-URL autolinking** (the operator hand-test of
+  2026-09-01 observed plain-text links in replies — the deferred behaviour, not a
+  defect), **inline citation anchoring**, **bespoke `rich_content`/`json_block`
+  rendering** (plus knowledge `links` rendering), and **structured frontmatter
+  presentation for memory files**; plus whatever lived use surfaces.
 - Embedded-HTML display policy — the viewer and print strip disallowed HTML tags from
   displayed text (a literal `<details>` typed in a message vanishes from display), losing
   characters the author wrote; evaluate escape-to-visible-text as the display default, and

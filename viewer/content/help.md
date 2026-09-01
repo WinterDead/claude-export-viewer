@@ -59,9 +59,10 @@ The full reading view. Messages are labelled **User** and **Assistant** and visu
 
 ### Message types and content blocks
 
-- **Text** renders as formatted markdown.
-- **Thinking blocks** (Claude's internal reasoning, where present) are collapsed by default with a size summary — expand to read.
-- **Tool use and tool results** render as labelled cards showing the tool name and result summary.
+- **Text** renders as formatted markdown. Where a current export records the web sources a passage cited, a small **Sources** list appears beneath the paragraph.
+- **Thinking blocks** (Claude's internal reasoning, where present) are collapsed by default — teased by Claude's own one-line summary when the export provides one, or by a size summary otherwise. Expand to read the reasoning, with the full summary list above it. Blocks the export marks truncated or cut off say so, and a block hidden in the Claude app carries a small **Hidden in the app** badge — the viewer shows everything in your export.
+- **Tool use and tool results** render as labelled cards showing the tool name. Where a current export carries the app's own display content, the card shows it — tables as tables, links as links, code as highlighted code — and anything structured beyond that folds into a collapsed section that expands to formatted JSON.
+- **Injected prompts** (text the product added to a turn — a skill or feature preamble) appear as collapsible **Injected prompt** cards, collapsed by default.
 - **Attachments** are folded into expandable blocks with their extracted text inside.
 - **Files** show a one-line notice — the export contains only the reference, never the file body.
 
@@ -159,6 +160,10 @@ After a re-import, some tags may point at things that no longer exist — a conv
 ## Upload history
 
 The [History](/history) page records every export load — when, whether it came from an upload or app startup, the filename, a content fingerprint, and the headline counts at the time. Over multiple re-imports it doubles as a record of how your archive has grown. Restarting the app with the same export doesn't add duplicate entries; uploading through the UI always records, even for a file you've loaded before.
+
+## Appearance
+
+The viewer follows your system's light or dark preference by default. Use the Theme control at the end of the navigation bar to choose Light or Dark instead; the choice is remembered on this machine in a small cookie the app sets for itself — nothing is sent anywhere. Printing and PDF output always use the light theme.
 
 ## Backups and your data
 

@@ -1,6 +1,6 @@
 # Claude Export Viewer
 
-A local web app for reading your Claude.ai data export — the ZIP archive Anthropic sends when
+A local web app for reading your Claude.ai data export — the files Anthropic provides when
 you request your data. It gives you a browsable, searchable interface over your conversations
 (including the full branch history of regenerated and edited messages), your projects, and
 Claude's memory, with project tagging, full-text search, and upload history. Everything runs on
@@ -27,8 +27,25 @@ The in-app help page, with one section expanded:
 
 ![The help page with collapsible sections, one expanded to show the tagging workflow](docs/images/help.png)
 
+The Memory page, with a memory file expanded to show its metadata header above the rendered
+content:
+
+![The Memory page with memory files grouped by folder, one expanded showing its verbatim metadata header](docs/images/memory.png)
+
+The Account page, with account details and login history:
+
+![The Account page showing account details and a login-history table](docs/images/account.png)
+
+Reading a conversation in dark mode:
+
+![A conversation rendered in the dark theme, with a collapsed thinking block](docs/images/conversation-dark.png)
+
 ## Features
 
+- **Current and legacy export formats.** Loads the current multi-file export — a
+  manifest plus category ZIPs, in any subset — and older single-ZIP exports alike,
+  detected by content rather than filename, with a banner naming anything that's
+  missing.
 - **Conversation browsing with branch navigation.** Regenerated and edited messages appear as
   branch points with a switcher; every branch is reachable, and a given branch combination has
   a stable URL you can bookmark.
@@ -39,8 +56,11 @@ The in-app help page, with one section expanded:
   (not yet reviewed), tagged to a project, or confirmed as No Project — and tags persist when
   you upload a newer export, so the triage work stays done. Bulk tagging with shift-click
   range selection is built in.
-- **Memory rendering.** Claude's global memory and per-project memories, with collapsible
-  sections.
+- **Memory rendering.** Claude's conversation memory, its memory files (grouped by
+  folder, metadata headers shown verbatim), and per-project memories, all with
+  collapsible sections.
+- **Account page.** Your account details and, for current exports, your login history —
+  shown because it's your data.
 - **Full-text search** (SQLite FTS5) across messages — including alternate branches — titles,
   summaries, projects, knowledge documents, and memory. Natural-language queries work as-is; a
   built-in syntax guide covers phrases, prefixes, proximity, and boolean operators. Results
@@ -55,8 +75,11 @@ The in-app help page, with one section expanded:
   thinking blocks are opt-in.
 - **Print and PDF** — print or save any conversation as PDF from the browser, with a links
   appendix and what-you-see-is-what-you-get handling of collapsed sections.
-- **Thinking blocks** — Claude's reasoning is preserved and rendered as collapsible sections
-  within each conversation, flagged where the export marks a block truncated or cut off.
+- **Thinking blocks** — Claude's reasoning is preserved and rendered as collapsible
+  sections, teased by Claude's own summary where the export provides one, and flagged
+  where a block was truncated, cut off, or marked hidden in the app.
+- **Dark mode.** Follows your system preference, with a manual override remembered on
+  your machine.
 - **Syntax-highlighted code blocks**, via a vendored copy of highlight.js (no CDN).
 - **In-app help** covering everything from requesting an export to the tagging workflow.
 
