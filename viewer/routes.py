@@ -101,6 +101,14 @@ NO_PROJECT_SLUG = "no-project"
 # markdown → bleach pipeline as every other rendered blob.
 HELP_CONTENT_PATH = Path(__file__).resolve().parent / "content" / "help.md"
 
+# Theme (v1.3.0 Session T): default follows the system; the manual override
+# persists in a first-party cookie so the server can render the theme class
+# on <html> — no localStorage, no flash of the wrong theme. Disclosed in
+# help ("Appearance").
+THEMES: tuple[str, ...] = ("system", "light", "dark")
+THEME_COOKIE = "viewer_theme"
+THEME_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # a year is fine
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -1221,6 +1229,26 @@ def inspect_post():
     display = summarise_set({kind: [n for n, _d in entries] for kind, entries in slotted.items()})
     begin_inspection(current_app, export, display, manifest_status=manifest_status)
     return redirect(url_for("viewer.index"))
+
+
+@bp.route("/theme", methods=["POST"])
+def theme_set():
+    """The nav Theme control (v1.3.0 Session T). Stores the choice in the
+    ``viewer_theme`` cookie and bounces back to the submitting page. Not
+    guarded by :func:`_refuse_while_inspecting`: the theme is app chrome,
+    not export or tag state, so changing it mid-inspection is harmless."""
+    theme = request.form.get("theme", "")
+    if theme not in THEMES:
+        abort(400, "Unknown theme.")
+    resp = redirect(_safe_redirect(request.form.get("next", ""), url_for("viewer.index")))
+    resp.set_cookie(
+        THEME_COOKIE,
+        theme,
+        max_age=THEME_COOKIE_MAX_AGE,
+        samesite="Lax",
+        httponly=True,
+    )
+    return resp
 
 
 @bp.route("/inspect/exit", methods=["POST"])

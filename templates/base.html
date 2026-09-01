@@ -1,12 +1,34 @@
 <!doctype html>
-<html lang="en-CA">
+{# The theme class is server-rendered from the viewer_theme cookie
+   (v1.3.0 Session T) so the correct palette paints first — no flash. #}
+<html lang="en-CA" class="theme-{{ g_theme }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  {% if g_theme == 'dark' %}
+    <meta name="theme-color" content="#16181b">
+  {% elif g_theme == 'light' %}
+    <meta name="theme-color" content="#fefefe">
+  {% else %}
+    <meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#16181b" media="(prefers-color-scheme: dark)">
+  {% endif %}
   <title>{% block title %}Claude Export Viewer{% endblock %}</title>
-  {# Vendored highlight.js theme loads BEFORE style.css so app styles win
-     equal-specificity ties (pre/code padding and background). #}
-  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github.min.css') }}">
+  {# Vendored highlight.js themes load BEFORE style.css so app styles win
+     equal-specificity ties (pre/code padding and background). The theme
+     pick is media-attribute routing, all server-rendered: print always
+     loads the light theme (print output is theme-independent), the screen
+     sheet follows the theme class, and under System the OS preference
+     chooses (v1.3.0 Session T; pinned by tests/test_highlighting.py). #}
+  {% if g_theme == 'dark' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github.min.css') }}" media="print">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github-dark.min.css') }}" media="screen">
+  {% elif g_theme == 'light' %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github.min.css') }}">
+  {% else %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github.min.css') }}" media="print, screen and (prefers-color-scheme: light)">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/highlightjs/github-dark.min.css') }}" media="screen and (prefers-color-scheme: dark)">
+  {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='memory.js') }}" defer></script>
   {# Deferred scripts execute in document order — the highlight.js bundle
@@ -37,6 +59,24 @@
         <li><a href="{{ url_for('viewer.history_view') }}">History</a></li>
         <li><a href="{{ url_for('viewer.inspect_form') }}">Inspect</a></li>
         <li><a href="{{ url_for('viewer.help_view') }}">Help</a></li>
+        {# Theme control (v1.3.0 Session T): nav tail, after Help. Copy C4:
+           label Theme; options System, Light, Dark. Same select-submit idiom
+           as the tag form; hidden at screenshot capture like the footer. #}
+        <li class="theme-control">
+          <form method="post" action="{{ url_for('viewer.theme_set') }}" class="theme-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
+            <label class="theme-form-label">
+              <span class="theme-form-text">Theme</span>
+              <select name="theme" class="theme-form-select" onchange="this.form.submit()">
+                <option value="system" {% if g_theme == 'system' %}selected{% endif %}>System</option>
+                <option value="light" {% if g_theme == 'light' %}selected{% endif %}>Light</option>
+                <option value="dark" {% if g_theme == 'dark' %}selected{% endif %}>Dark</option>
+              </select>
+            </label>
+            <noscript><button type="submit" class="theme-form-submit">Set</button></noscript>
+          </form>
+        </li>
       </ul>
     </nav>
   </header>

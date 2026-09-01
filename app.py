@@ -31,7 +31,7 @@ import logging
 import secrets
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, request
 from flask_wtf.csrf import CSRFProtect
 
 from viewer.cache import load_or_build, set_fingerprint, zip_hash
@@ -54,6 +54,8 @@ from viewer.render import (
 )
 from viewer.routes import (
     MAX_REQUEST_BYTES,
+    THEME_COOKIE,
+    THEMES,
     bp,
     manifest_status_for_set,
     summarise_set_dir,
@@ -296,6 +298,14 @@ def create_app(
             # Nav rule (record §8): the Account entry shows whenever
             # users.json is in the viewed set, both formats.
             "g_has_account": live_export.user is not None,
+            # Theme (v1.3.0 Session T): the viewer_theme cookie, clamped to
+            # the known values — an absent or mangled cookie renders as
+            # System (follow the OS preference).
+            "g_theme": (
+                request.cookies.get(THEME_COOKIE)
+                if request.cookies.get(THEME_COOKIE) in THEMES
+                else "system"
+            ),
         }
 
     app.register_blueprint(bp)

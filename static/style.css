@@ -14,6 +14,112 @@
   --border: #dcdcdc;
   --link: #0050a0;
   --code-bg: #f4f4f4;
+  /* Dark mode (v1.3.0 Session T): the Session R Phase 2 theming lens's
+     hardcoded-colour census, tokenised. Light values here are byte-equal to
+     the literals they replaced. */
+  --surface: #ffffff; /* cards and controls sitting on --bg */
+  --surface-muted: #fafafa; /* thinking blocks, syntax guide, quiet headers */
+  --surface-assistant: #fbfaf7; /* assistant message tint */
+  --on-accent: #ffffff; /* text on accent/link/muted fills */
+  --on-accent-soft: rgba(255, 255, 255, 0.85);
+  --accent-bg: #fff7ee; /* amber advisory tint (.warn, orphan banner) */
+  --shadow: rgba(0, 0, 0, 0.06);
+  --mark-bg: #fff3a8; /* search-hit <mark> highlight */
+  --error-accent: #c00; /* tool-result error card */
+  --error-bg: #fff0f0;
+  --banner-error-bg: #fdecea;
+  --banner-error-border: #b3261e;
+  --banner-error-fg: #5f1a14;
+  --banner-degraded-bg: #f3f4f6;
+  --banner-degraded-border: #6b7280;
+  --banner-degraded-fg: #374151;
+  --banner-inspect-bg: #e8f1fb;
+  --banner-inspect-border: #2a6fbb;
+  --banner-inspect-fg: #163a5f;
+  --banner-inspect-hover: #d7e7f8;
+}
+
+/* Theme selection (v1.3.0 Session T). The server stamps exactly one of
+   .theme-system / .theme-light / .theme-dark on <html> from the
+   viewer_theme cookie, so the correct palette renders on first paint — no
+   flash of the wrong theme. Light is the :root default above; the dark set
+   applies under an explicit .theme-dark always, and under .theme-system
+   only when the OS prefers dark. The two dark token blocks below MUST stay
+   identical — tests/test_theme.py pins them declaration-for-declaration,
+   and pins that the @media print reset covers every token they redefine. */
+
+html.theme-light {
+  color-scheme: light;
+}
+
+html.theme-system {
+  color-scheme: light dark;
+}
+
+html.theme-dark {
+  color-scheme: dark;
+}
+
+html.theme-dark {
+  --bg: #16181b;
+  --fg: #e8e6e3;
+  --muted: #a3a09b;
+  --accent: #e8833a;
+  --border: #3a3d42;
+  --link: #7cb5f2;
+  --code-bg: #232629;
+  --surface: #1e2124;
+  --surface-muted: #202327;
+  --surface-assistant: #211f1c;
+  --on-accent: #16181b;
+  --on-accent-soft: rgba(22, 24, 27, 0.75);
+  --accent-bg: #35261a;
+  --shadow: rgba(0, 0, 0, 0.45);
+  --mark-bg: #5c4c14;
+  --error-accent: #e0655c;
+  --error-bg: #38211f;
+  --banner-error-bg: #402523;
+  --banner-error-border: #b3564c;
+  --banner-error-fg: #f2cdc8;
+  --banner-degraded-bg: #26282c;
+  --banner-degraded-border: #6b7280;
+  --banner-degraded-fg: #c6ccd6;
+  --banner-inspect-bg: #1a2a3c;
+  --banner-inspect-border: #4a86c8;
+  --banner-inspect-fg: #cfe2f8;
+  --banner-inspect-hover: #24405c;
+}
+
+@media (prefers-color-scheme: dark) {
+  html.theme-system {
+    --bg: #16181b;
+    --fg: #e8e6e3;
+    --muted: #a3a09b;
+    --accent: #e8833a;
+    --border: #3a3d42;
+    --link: #7cb5f2;
+    --code-bg: #232629;
+    --surface: #1e2124;
+    --surface-muted: #202327;
+    --surface-assistant: #211f1c;
+    --on-accent: #16181b;
+    --on-accent-soft: rgba(22, 24, 27, 0.75);
+    --accent-bg: #35261a;
+    --shadow: rgba(0, 0, 0, 0.45);
+    --mark-bg: #5c4c14;
+    --error-accent: #e0655c;
+    --error-bg: #38211f;
+    --banner-error-bg: #402523;
+    --banner-error-border: #b3564c;
+    --banner-error-fg: #f2cdc8;
+    --banner-degraded-bg: #26282c;
+    --banner-degraded-border: #6b7280;
+    --banner-degraded-fg: #c6ccd6;
+    --banner-inspect-bg: #1a2a3c;
+    --banner-inspect-border: #4a86c8;
+    --banner-inspect-fg: #cfe2f8;
+    --banner-inspect-hover: #24405c;
+  }
 }
 
 * {
@@ -36,7 +142,7 @@ a {
 
 .site-header {
   border-bottom: 1px solid var(--border);
-  background: white;
+  background: var(--surface);
   padding: 0.75rem 1rem;
 }
 
@@ -69,6 +175,35 @@ a {
 
 .site-nav a:hover {
   text-decoration: underline;
+}
+
+/* Theme control (v1.3.0 Session T): the nav tail, after Help. Suppressible
+   at capture time like the footer — screenshots hide .theme-control. */
+.theme-control {
+  margin-left: auto;
+}
+
+.theme-form {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.theme-form-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.theme-form-text {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.theme-form-select {
+  font: inherit;
+  font-size: 0.9rem;
 }
 
 .site-main {
@@ -223,7 +358,7 @@ section h2 {
   padding: 0.4rem 0.85rem;
   text-decoration: none;
   color: var(--fg);
-  background: white;
+  background: var(--surface);
   border-right: 1px solid var(--border);
 }
 
@@ -237,7 +372,7 @@ section h2 {
 
 .sort-option.active {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 .sort-option.active:hover {
@@ -344,22 +479,22 @@ section h2 {
 
 .badge-starter {
   background: var(--link);
-  color: white;
+  color: var(--on-accent);
 }
 
 .badge-source-upload {
   background: var(--link);
-  color: white;
+  color: var(--on-accent);
 }
 
 .badge-source-startup {
   background: var(--muted);
-  color: white;
+  color: var(--on-accent);
 }
 
 .badge-source-unknown {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 /* Project detail */
@@ -437,7 +572,7 @@ section h2 {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 0.6rem 0.85rem;
@@ -446,7 +581,7 @@ section h2 {
   flex-wrap: wrap;
   gap: 0.6rem 0.85rem;
   align-items: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px var(--shadow);
 }
 
 /* Hidden by default — JS reveals when count > 0. */
@@ -474,7 +609,7 @@ section h2 {
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--surface);
   color: var(--fg);
   max-width: 24ch;
 }
@@ -486,7 +621,7 @@ section h2 {
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  background: white;
+  background: var(--surface);
   color: var(--fg);
 }
 
@@ -497,7 +632,7 @@ section h2 {
 
 .bulk-btn-tag {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 .bulk-btn-tag:disabled {
@@ -508,7 +643,7 @@ section h2 {
 }
 
 .bulk-btn-retag {
-  background: #fff7ee;
+  background: var(--accent-bg);
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -563,7 +698,7 @@ section h2 {
   padding: 0.3rem 0.5rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--surface);
   color: var(--fg);
   max-width: 22ch;
 }
@@ -647,13 +782,13 @@ section h2 {
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  background: white;
+  background: var(--surface);
   color: var(--fg);
 }
 
 .export-btn {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
 }
 
@@ -711,7 +846,7 @@ section h2 {
 
 .warn {
   border: 1px solid var(--accent);
-  background: #fff7ee;
+  background: var(--accent-bg);
   padding: 0.6rem 0.85rem;
   border-radius: 4px;
   font-size: 0.92rem;
@@ -727,7 +862,7 @@ section h2 {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.85rem 1rem;
-  background: white;
+  background: var(--surface);
 }
 
 .msg-human {
@@ -736,7 +871,7 @@ section h2 {
 
 .msg-assistant {
   border-left: 3px solid var(--accent);
-  background: #fbfaf7;
+  background: var(--surface-assistant);
 }
 
 .msg-header {
@@ -769,7 +904,7 @@ details.collapsible > summary {
   border: 1px dashed var(--border);
   border-radius: 4px;
   padding: 0.4rem 0.75rem;
-  background: #fafafa;
+  background: var(--surface-muted);
 }
 
 .thinking > summary {
@@ -804,7 +939,7 @@ details.collapsible > summary {
   font-weight: 600;
   padding: 0.05rem 0.4rem;
   border-radius: 3px;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--border);
   color: var(--muted);
 }
@@ -818,8 +953,8 @@ details.collapsible > summary {
 }
 
 .block-tool-result.is-error {
-  border-color: #c00;
-  background: #fff0f0;
+  border-color: var(--error-accent);
+  background: var(--error-bg);
 }
 
 .block-card-name {
@@ -830,7 +965,7 @@ details.collapsible > summary {
   font-size: 0.7rem;
   padding: 0.05rem 0.35rem;
   background: var(--link);
-  color: white;
+  color: var(--on-accent);
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -867,7 +1002,7 @@ details.collapsible > summary {
 .display-content-table td {
   border: 1px solid var(--border);
   padding: 0.25rem 0.6rem;
-  background: white;
+  background: var(--surface);
 }
 
 .display-content-json > summary {
@@ -878,7 +1013,7 @@ details.collapsible > summary {
 .display-content-json pre {
   margin: 0.35rem 0 0;
   padding: 0.5rem 0.7rem;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   overflow-x: auto;
@@ -917,7 +1052,7 @@ details.collapsible > summary {
   font-size: 0.7rem;
   padding: 0.05rem 0.35rem;
   border: 1px solid var(--border);
-  background: white;
+  background: var(--surface);
   color: var(--muted);
   border-radius: 3px;
   text-transform: uppercase;
@@ -980,7 +1115,7 @@ details.collapsible > summary {
   border: 1px solid var(--accent);
   border-radius: 6px;
   padding: 0.6rem 0.85rem;
-  background: #fff7ee;
+  background: var(--accent-bg);
   margin: 0;
 }
 
@@ -1008,7 +1143,7 @@ details.collapsible > summary {
   padding: 0.4rem 0.6rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--surface);
   text-decoration: none;
   color: var(--fg);
   font-size: 0.92rem;
@@ -1021,7 +1156,7 @@ details.collapsible > summary {
 
 .branch-option.active {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-color: var(--accent);
   font-weight: 500;
 }
@@ -1033,7 +1168,7 @@ details.collapsible > summary {
 }
 
 .branch-option.active .branch-time {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--on-accent-soft);
 }
 
 .branch-meta {
@@ -1060,7 +1195,7 @@ details.collapsible > summary {
 .memory-block {
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: white;
+  background: var(--surface);
   overflow: hidden;
 }
 
@@ -1124,7 +1259,7 @@ details.collapsible > summary {
   gap: 0.5rem;
   padding: 0.4rem 0.85rem;
   border-bottom: 1px solid var(--border);
-  background: #fafafa;
+  background: var(--surface-muted);
 }
 
 .memory-section-toggle {
@@ -1132,7 +1267,7 @@ details.collapsible > summary {
   font-size: 0.82rem;
   padding: 0.2rem 0.6rem;
   border: 1px solid var(--border);
-  background: white;
+  background: var(--surface);
   color: var(--muted);
   border-radius: 3px;
   cursor: pointer;
@@ -1155,11 +1290,11 @@ details.collapsible > summary {
   border: 1px solid var(--border);
   border-radius: 4px;
   margin-bottom: 0.6rem;
-  background: white;
+  background: var(--surface);
 }
 
 .memory-section[open] {
-  background: white;
+  background: var(--surface);
 }
 
 .memory-section-summary {
@@ -1304,7 +1439,7 @@ details.collapsible > summary {
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: white;
+  background: var(--surface);
   color: var(--fg);
 }
 
@@ -1319,7 +1454,7 @@ details.collapsible > summary {
   padding: 0.5rem 1rem;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -1346,7 +1481,7 @@ details.collapsible > summary {
   border: 1px dashed var(--border);
   border-radius: 4px;
   padding: 0.4rem 0.75rem;
-  background: #fafafa;
+  background: var(--surface-muted);
   max-width: 75ch;
   margin: 0.75rem 0 1.5rem;
 }
@@ -1434,7 +1569,7 @@ details.collapsible > summary {
   border-radius: 6px;
   padding: 0.85rem 1rem;
   margin-bottom: 0.85rem;
-  background: white;
+  background: var(--surface);
 }
 
 .search-group-title {
@@ -1462,7 +1597,7 @@ details.collapsible > summary {
 }
 
 .search-snippet mark {
-  background: #fff3a8;
+  background: var(--mark-bg);
   color: inherit;
   padding: 0 0.1em;
   border-radius: 2px;
@@ -1557,7 +1692,7 @@ details.collapsible > summary {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0.5rem 1rem;
-  background: #fff7ee;
+  background: var(--accent-bg);
   border-bottom: 1px solid var(--accent);
   color: var(--fg);
   font-size: 0.92rem;
@@ -1570,9 +1705,9 @@ details.collapsible > summary {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0.5rem 1rem;
-  background: #fdecea;
-  border-bottom: 1px solid #b3261e;
-  color: #5f1a14;
+  background: var(--banner-error-bg);
+  border-bottom: 1px solid var(--banner-error-border);
+  color: var(--banner-error-fg);
   font-size: 0.92rem;
 }
 
@@ -1583,9 +1718,9 @@ details.collapsible > summary {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0.5rem 1rem;
-  background: #f3f4f6;
-  border-bottom: 1px solid #6b7280;
-  color: #374151;
+  background: var(--banner-degraded-bg);
+  border-bottom: 1px solid var(--banner-degraded-border);
+  color: var(--banner-degraded-fg);
   font-size: 0.92rem;
 }
 
@@ -1611,9 +1746,9 @@ details.collapsible > summary {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0.5rem 1rem;
-  background: #e8f1fb;
-  border-bottom: 1px solid #2a6fbb;
-  color: #163a5f;
+  background: var(--banner-inspect-bg);
+  border-bottom: 1px solid var(--banner-inspect-border);
+  color: var(--banner-inspect-fg);
   font-size: 0.92rem;
   display: flex;
   align-items: center;
@@ -1630,16 +1765,16 @@ details.collapsible > summary {
   font: inherit;
   font-size: 0.85rem;
   padding: 0.25rem 0.7rem;
-  border: 1px solid #2a6fbb;
-  background: white;
-  color: #163a5f;
+  border: 1px solid var(--banner-inspect-border);
+  background: var(--surface);
+  color: var(--banner-inspect-fg);
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .inspect-exit-btn:hover {
-  background: #d7e7f8;
+  background: var(--banner-inspect-hover);
 }
 
 /* The upload form's controls sit inside a fieldset so inspect mode can
@@ -1709,7 +1844,7 @@ details.collapsible > summary {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-radius: 3px;
 }
 
@@ -1739,7 +1874,7 @@ details.collapsible > summary {
   padding: 0.4rem 0.85rem;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -1766,7 +1901,7 @@ details.collapsible > summary {
   align-items: flex-start;
   margin: 1rem 0;
   padding: 1rem;
-  background: white;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
   max-width: 640px;
@@ -1790,7 +1925,7 @@ details.collapsible > summary {
   padding: 0.5rem 1rem;
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border-radius: 4px;
   cursor: pointer;
 }
@@ -1831,6 +1966,45 @@ details.collapsible > summary {
 /* ---------- Print stylesheet (polished in v1.2 Session N) ---------- */
 
 @media print {
+  /* Print stays light regardless of the active theme (Session T, per the
+     Session R Phase 2 review): every token the dark set redefines is reset
+     to its light value here, at the same specificity as the theme blocks
+     (this block is later in the file, so source order wins the tie).
+     tests/test_theme.py pins the coverage — keep this list in lockstep
+     with the dark token blocks at the top of the file. */
+  html.theme-light,
+  html.theme-system,
+  html.theme-dark {
+    color-scheme: light;
+    --bg: #fefefe;
+    --fg: #1a1a1a;
+    --muted: #5b5b5b;
+    --accent: #c45a00;
+    --border: #dcdcdc;
+    --link: #0050a0;
+    --code-bg: #f4f4f4;
+    --surface: #ffffff;
+    --surface-muted: #fafafa;
+    --surface-assistant: #fbfaf7;
+    --on-accent: #ffffff;
+    --on-accent-soft: rgba(255, 255, 255, 0.85);
+    --accent-bg: #fff7ee;
+    --shadow: rgba(0, 0, 0, 0.06);
+    --mark-bg: #fff3a8;
+    --error-accent: #c00;
+    --error-bg: #fff0f0;
+    --banner-error-bg: #fdecea;
+    --banner-error-border: #b3261e;
+    --banner-error-fg: #5f1a14;
+    --banner-degraded-bg: #f3f4f6;
+    --banner-degraded-border: #6b7280;
+    --banner-degraded-fg: #374151;
+    --banner-inspect-bg: #e8f1fb;
+    --banner-inspect-border: #2a6fbb;
+    --banner-inspect-fg: #163a5f;
+    --banner-inspect-hover: #d7e7f8;
+  }
+
   /* Drop chrome that has no meaning on paper. The footer stays hidden
      deliberately — it carries the account name and source path, which a
      shared printout shouldn't leak. */
