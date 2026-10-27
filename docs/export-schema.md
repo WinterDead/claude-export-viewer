@@ -2,9 +2,11 @@
 
 Reference for the structure of the data export Anthropic delivers when a user requests their
 Claude.ai data. All field shapes here were determined empirically from real exports of a single
-account — a May 2026 export in the legacy format and an August 2026 export in the current
-format — profiled with `tools/scan_export_schema.py` (aggregate-only output); they are not
-pulled from public documentation.
+account — a May 2026 export in the legacy format, an August 2026 export in the current
+format, and (from v1.4.0) a later legacy archive plus two October 2026 current-format sets —
+profiled with `tools/scan_export_schema.py` (aggregate-only output); they are not pulled from
+public documentation. The October sets added three categories (`frames`, `artifact_data`,
+`claude_code_cloud`); `docs/export-categories-design.md` is the design record for them.
 
 **The data files carry no schema version** — there is no `schema_version`, `export_version`, or
 similar marker in any data file — so the parser must tolerate missing optional fields and
@@ -69,7 +71,9 @@ Manifest shape (synthetic):
     {
       "batch_index": 0,                              // ordinal over this list: 0,1,2,3
       "category":    "light_metadata",               // light_metadata | projects |
-                                                     //   memories | conversations
+                                                     //   memories | conversations |
+                                                     //   frames | artifact_data |
+                                                     //   claude_code_cloud
       "part":        0,                              // part number within the category
       "filename":    "light_metadata-000.zip",
       "export_url":  "https://example.invalid/download/light_metadata-000.zip"
@@ -80,7 +84,10 @@ Manifest shape (synthetic):
 ```
 
 Observed values: `category` is one of `light_metadata`, `projects`, `memories`,
-`conversations`; `part` is `0` for every entry; `batch_index` enumerates the file list
+`conversations`, and — in the October 2026 sets — `frames`, `artifact_data`,
+`claude_code_cloud`. Which categories appear varies by account and date (one October set
+listed five files including `frames`; a later one listed all seven). `total_files` equals the
+list length. `part` is `0` for every entry; `batch_index` enumerates the file list
 (`0`–`3`), so unlike the legacy `batch-0000` suffix it is not constant. The `-000` in each
 filename is the zero-padded part number, implying multi-part categories
 (`conversations-001.zip`, …) are possible for larger accounts; no multi-part export has been
@@ -95,6 +102,9 @@ Category ZIP contents:
 | `projects-000.zip`        | `projects/<project_uuid>.json`            | same, same subdirectory      |
 | `memories-000.zip`        | `memories/<account-scoped uuid>.json`     | `memories.json` (root)       |
 | `conversations-000.zip`   | `conversations.json` (root)               | same, root                   |
+| `frames-000.zip`          | `artifacts/<artifact_uuid>/…` (see `frames`) | none                      |
+| `artifact_data-000.zip`   | `artifacts/<artifact_uuid>/data/<name>.json` | none                      |
+| `claude_code_cloud-000.zip` | `claude_code_cloud/routines.json`, `claude_code_cloud/routine_runs.json` | none |
 
 Note the internal-layout inconsistency, preserved here as a format fact: **projects and
 memories use a subdirectory inside their zips; conversations and light_metadata are
@@ -113,6 +123,13 @@ history) uses 32-character values consistent with the explicit-offset form
 (`2026-08-25T05:00:00.000000+00:00`). In the legacy format, conversation-level timestamps
 used the `Z` form while message-level ones used the offset form. Both forms parse with
 `datetime.fromisoformat` on Python 3.11+; a parser should accept either at any depth.
+
+The October categories add more forms: `artifact.json` timestamps are 25 characters
+(seconds with an explicit offset, `2026-10-01T12:00:00+00:00`); page comment timestamps 24
+(milliseconds, `Z`); artifact data 32 (microseconds, offset); routine records 27
+(microseconds, `Z`); run `scheduled_for` and one-off `run_once_at` 20 (seconds, `Z`); run
+`started_at` 27–30 (six to nine fractional digits, `Z`). All parse with
+`datetime.fromisoformat`, which keeps the first six fractional digits.
 
 ---
 
@@ -137,9 +154,11 @@ future export contains zero or multiple records.
 
 ---
 
-## `login_history.json` — (current only)
+## `login_history.json` — (both)
 
-New in the current format, at the root of `light_metadata-000.zip`. **A sensitive surface**:
+At the root of `light_metadata-000.zip` in the current format. Later legacy single-ZIP
+archives (observed in an August 2026 legacy archive) carry the same file, same shape, at the
+archive root beside `users.json`; earlier legacy archives have none. **A sensitive surface**:
 IP addresses, login timestamps, and device fingerprints for every recorded login.
 
 ```jsonc
@@ -226,7 +245,11 @@ A single JSON file inside `memories-000.zip`, in a `memories/` subdirectory, nam
 Field notes:
 
 - `conversations_memory` — **(both)** — a single opaque text blob (markdown-ish; ~10 KB in
-  the current reference). Treat as unstructured text.
+  the current reference). Treat as unstructured text. It is **frozen** once an account uses
+  memory files: in two October 2026 exports weeks apart it was byte-identical while
+  `memory_files` changed (and it differed from the August legacy archive's). The viewer
+  treats it as legacy whenever memory files are present
+  (`docs/export-categories-design.md` §7).
 - `project_memories` — **(both)** — a dict keyed by project UUID, values are text blobs. A
   project with no memory is absent from the dict. A key may reference a project that is not
   in the projects category (**dangling project memory** — the viewer already preserves and
@@ -365,7 +388,7 @@ chain ending at the message with the latest `created_at`).
 The legacy reference contained four block types; the current reference adds a fifth
 (`injected_prompt_block`) and many block-level fields. Census across the current reference's
 14,404 blocks: `text` 4,354; `thinking` 3,585; `tool_use` 3,229; `tool_result` 3,227;
-`injected_prompt_block` 9.
+`injected_prompt_block` 9. The October 2026 sets add a sixth, `document` (below).
 
 All types share `type`, `flags` (null throughout both references), and
 `start_timestamp`/`stop_timestamp` (nullable). Field lists below are per-type; fields new in
@@ -516,7 +539,25 @@ The reply to a `tool_use`.
 
 `structured_content`, when a dict (15 blocks in the current reference), describes a
 file-tool target: `{parsed, path, path_segments, target, updated_at, version}` — or a
-`documents` list of the same shape. Sparse and evolving; preserve-and-flag.
+`documents` list of the same shape. Sparse and evolving; preserve-and-flag. In the October
+2026 sets its key set widened (memory-tool, spreadsheet, and revision keys among them), and
+the result of an `Artifact` publishing call carries the published artifact's id and link
+*(current only, October 2026)*:
+
+```jsonc
+"structured_content": {
+  "artifact_id": "00000000-0000-0000-0000-0000000a0002",   // a frames artifact id
+  "url":         "https://example.invalid/artifact/00000000-0000-0000-0000-0000000a0002"
+}
+```
+
+`meta` may also carry `tool_references` *(current only, October 2026)*: a list of short
+strings naming tools (one to three entries observed).
+
+Tool `input` is an open set and gains keys freely. One October shape matters to the viewer:
+Docs-connector calls carry `input.container.id`, which can name a `frames` artifact of kind
+`page`. Artifact ids also appear in tool-result prose; the viewer's cross-links use only
+`input` and `structured_content` (`docs/export-categories-design.md` §6.5).
 
 The nested `content` list inside a `tool_result` carries sub-blocks of these types:
 
@@ -571,6 +612,24 @@ into the conversation (e.g. a skill or feature preamble).
 }
 ```
 
+### `document` — (current only, October 2026)
+
+A document the user attached to their turn — always on `human` messages in the observed set
+(22 blocks). The file itself is not in the export; the block names it.
+
+```jsonc
+{
+  "type":            "document",
+  "file_uuid":       "00000000-0000-0000-0000-0000000000d0",
+  "title":           "Synthetic brief.pdf",     // occasionally absent (1 of 22)
+  "flags":           null,
+  "start_timestamp": "...",
+  "stop_timestamp":  "..."
+}
+```
+
+`title` and `file_uuid` are block-level keys only on this type in the observed set.
+
 ---
 
 ## `attachments` and `files` on messages — (both)
@@ -588,7 +647,10 @@ Two distinct mechanisms, unchanged across formats. Most messages have neither.
 }
 ```
 
-The body is embedded. The renderer can display `extracted_content` directly.
+The body is embedded. The renderer can display `extracted_content` directly. Observed
+`file_type` values include short extensions (`txt`), MIME types (`text/markdown`,
+`text/plain`, `text/javascript`, `application/json`, and — October 2026 — `text/vtt`), and the
+empty string; treat it as an open set.
 
 ### `files` — binary references
 
@@ -602,6 +664,176 @@ The body is embedded. The renderer can display `extracted_content` directly.
 Only the filename and a UUID are present. **The binary itself is not in the export**, in
 either format. The renderer can show the filename and a "binary not included in export"
 notice.
+
+---
+
+## `frames` — published artifacts — (current only, October 2026)
+
+One directory per published artifact under `artifacts/<artifact_uuid>/` (three artifacts in
+the larger observed set):
+
+```
+artifacts/<artifact_uuid>/artifact.json                       descriptor (always)
+artifacts/<artifact_uuid>/versions/<version_id>.html          single-HTML version
+artifacts/<artifact_uuid>/versions/<version_id>.files.json    multi-file version: file list…
+artifacts/<artifact_uuid>/versions/<version_id>/…             …beside a directory of files
+artifacts/<artifact_uuid>/<name>.md                           page kind: the content
+artifacts/<artifact_uuid>/<name>.json                         page kind: comment threads
+```
+
+A version is laid out one way or the other, never both; a version may also have no files at
+all (every `page`-kind version observed). File names below the artifact directory are
+user-authored and vary — consumers find them by layout and extension, never by name.
+
+### `artifact.json`
+
+```jsonc
+{
+  "id":             "00000000-0000-0000-0000-0000000a0002",   // equals the directory name
+  "kind":           "artifact",          // artifact | page — open set
+  "visibility":     "private",           // only private observed — open set
+  "owner_account":  "00000000-0000-0000-0000-000000000001",   // the account uuid
+  "updated_at":     "2026-10-01T12:00:00+00:00",
+  "active_version": "1790000000-e5f6",   // always present in the list (observed)
+  "versions": [
+    {
+      "id":          "1790000000-e5f6",  // <unix-seconds>-<4 hex>; seconds == created_at
+      "title":       "Synthetic reading log",
+      "description": "Free text describing the version.",
+      "created_at":  "2026-10-01T12:00:00+00:00"
+    }
+    // … one to seven versions observed per artifact
+  ]
+}
+```
+
+The `versions` list carries no ordering guarantee a consumer should rely on (newest-first in
+the one multi-version artifact observed); sort by `created_at`. `active_version` was the
+newest version in every observed artifact, but nothing promises that either.
+
+### `<version_id>.files.json` — multi-file versions
+
+```jsonc
+{
+  "files": [
+    {
+      "original_path": "index.html",       // relative, depth 0–2, no leading "/"
+      "exported_as":   "index.html",       // equal to original_path in every observed entry
+      "sha256":        "<64 hex>",
+      "size_bytes":    360,
+      "mime_type":     "text/html"         // text/html | text/markdown | text/css |
+                                           //   text/javascript | font/woff2 | application/json
+    }
+    // … seven to eleven entries per version observed
+  ]
+}
+```
+
+Every listed file was present under `versions/<version_id>/` at its `exported_as` path with a
+matching size and SHA-256; exactly one entry per version is `text/html` at depth 0 (the entry
+page). The entry page is a small shell beside large bundled scripts and stylesheets (up to
+1.5 MB of JavaScript observed); the authored content lives in the `text/markdown` files. A
+multi-file version may include a small capability configuration as its only JSON file:
+
+```jsonc
+{ "v": 1, "source": "db", "db": { "meta": { … }, "collections": [ … ] } }
+```
+
+Single-HTML versions are complete pages with a doctype; the observed one linked an external
+web font and carried no scripts. Every observed multi-file entry page carried a script.
+
+### `page`-kind content and comments
+
+A `page` artifact has no version files. Its content is a root-level Markdown file and its
+comments a root-level JSON list of threads:
+
+```jsonc
+[
+  {
+    "resolved":    false,
+    "tab":         "…",                  // an opaque tab reference
+    "quoted_text": "First point",        // the passage the thread is anchored to
+    "comments": [
+      { "body": "Synthetic open question.", "created_at": "2026-10-01T12:00:00.000Z" }
+    ]
+  }
+]
+```
+
+---
+
+## `artifact_data` — data saved by artifacts — (current only, October 2026)
+
+```
+artifacts/<artifact_uuid>/data/<name>.json
+```
+
+The artifact uuid matched a `frames` artifact in the observed set. Each file:
+
+```jsonc
+{
+  "documents": [
+    {
+      "collection": "log_entries",       // user-defined collection name
+      "id":         "entry-0001",        // user-defined document id
+      "created_at": "2026-10-01T12:00:00.000000+00:00",
+      "updated_at": "2026-10-01T12:00:00.000000+00:00",
+      "data":       { "…": "…" }         // open set of user-defined keys (1–6 observed)
+    }
+  ]
+}
+```
+
+`data` is never interpreted: its keys and values are whatever the artifact stored.
+
+---
+
+## `claude_code_cloud` — scheduled tasks — (current only, October 2026)
+
+Claude Code scheduled tasks ("routines") and their runs. Both files wrap their records in a
+`claude_code_cloud` list.
+
+`claude_code_cloud/routines.json` (three routines observed):
+
+```jsonc
+{
+  "claude_code_cloud": [
+    {
+      "routine_id":      "trig_01SYNTHETICCRON00000001",   // trig_ prefix
+      "agent_id":        null,                              // null throughout
+      "name":            "Synthetic weekly tidy-up",
+      "prompt":          "The task's prompt text (1–3 KB observed).",
+      "prompt_withheld": false,                             // true: prompt not exported
+      "enabled":         true,
+      "schedule": {
+        "cron":        "0 9 * * 1",                         // exactly one of these two
+        "run_once_at": null                                 //   is non-null
+      },
+      "created_at":      "2026-10-01T09:00:00.250000Z",
+      "updated_at":      "2026-10-02T09:00:00.250000Z",
+      "ended_at":        null
+    }
+  ]
+}
+```
+
+`claude_code_cloud/routine_runs.json` (13 runs observed, all for one routine — most routines
+had none):
+
+```jsonc
+{
+  "claude_code_cloud": [
+    {
+      "routine_id":    "trig_01SYNTHETICCRON00000001",   // resolved to a routine every time
+      "scheduled_for": "2026-10-08T09:00:00Z",
+      "started_at":    "2026-10-08T09:00:04.123456789Z",
+      "finished_at":   "2026-10-08T09:03:41.654321Z",
+      "status":        "succeeded",                       // only value observed
+      "session_id":    "cse_01SYNTHETICSESSION0001"       // cse_ prefix; no session content
+    }
+  ]
+}
+```
 
 ---
 

@@ -21,8 +21,10 @@ byte-compares the checked-in binaries against a fresh build.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -945,7 +947,78 @@ def _current_conversations() -> list[dict[str, Any]]:
     }
     conv_3["chat_messages"][1]["content"][0].update(_current_tool_fields())
 
+    # conv-3 (v1.4.0): two attached-document blocks on the human turn (one
+    # without a title), and the assistant publishing the multi-file artifact
+    # (structured_content.artifact_id) and editing the page artifact through
+    # a Docs-style connector (input.container.id) — record §6.5, V17–V19.
+    conv_3["chat_messages"][0]["content"].extend(
+        [
+            _document_block("Synthetic brief.pdf"),
+            _document_block(None),
+        ]
+    )
+    publish_id = "toolu_synthetic_publish_1"
+    docs_id = "toolu_synthetic_docs_1"
+    assistant = conv_3["chat_messages"][1]["content"]
+    assistant[1:1] = [
+        _artifact_publish_use(publish_id),
+        _artifact_publish_result(publish_id),
+        _docs_update_use(docs_id),
+        _tool_result_current(
+            docs_id,
+            "docs_update",
+            [{"type": "text", "text": "Updated the synthetic page."}],
+        ),
+    ]
+
     return [conv_1, conv_2, conv_3, conv_4]
+
+
+def _document_block(title: str | None) -> dict[str, Any]:
+    """An attached-document block (V18): the file itself is never exported."""
+    block: dict[str, Any] = {
+        "type": "document",
+        "file_uuid": (
+            "00000000-0000-0000-0000-0000000000d0"
+            if title
+            else ("00000000-0000-0000-0000-0000000000d9")
+        ),
+        "flags": None,
+        "start_timestamp": MSG_TS,
+        "stop_timestamp": MSG_TS,
+    }
+    if title is not None:
+        block["title"] = title
+    return block
+
+
+def _artifact_publish_use(tool_id: str) -> dict[str, Any]:
+    block = _tool_use_current(tool_id, "Artifact", None)
+    block["input"] = {"action": "publish", "title": "Synthetic reading log"}
+    return block
+
+
+def _artifact_publish_result(tool_id: str) -> dict[str, Any]:
+    result = _tool_result_current(
+        tool_id,
+        "Artifact",
+        [{"type": "text", "text": f"Published artifact {ARTIFACT_MULTI_UUID}."}],
+        meta={"tool_references": ["Artifact"]},
+    )
+    result["structured_content"] = {
+        "artifact_id": ARTIFACT_MULTI_UUID,
+        "url": f"{ARTIFACT_URL_BASE}{ARTIFACT_MULTI_UUID}",
+    }
+    return result
+
+
+def _docs_update_use(tool_id: str) -> dict[str, Any]:
+    block = _tool_use_current(tool_id, "docs_update", None)
+    block["input"] = {
+        "container": {"kind": "project", "id": ARTIFACT_PAGE_UUID},
+        "payload": "Synthetic edit text.",
+    }
+    return block
 
 
 def _conversations_zip(convs: list[dict[str, Any]]) -> dict[str, bytes]:
@@ -1123,6 +1196,458 @@ def _current_conversations_part1_files() -> dict[str, bytes]:
     return _conversations_zip([*convs[2:], duplicate])
 
 
+# ---------------------------------------------------------------------------
+# The three later categories (v1.4.0 Session U): frames (published artifacts),
+# artifact_data, and claude_code_cloud. Structures mirror the verification
+# table in docs/export-categories-design.md §2; every name, title, path, and
+# body below is synthetic.
+# ---------------------------------------------------------------------------
+
+ARTIFACT_SINGLE_UUID = "00000000-0000-0000-0000-0000000a0001"
+ARTIFACT_MULTI_UUID = "00000000-0000-0000-0000-0000000a0002"
+ARTIFACT_PAGE_UUID = "00000000-0000-0000-0000-0000000a0003"
+# Artifact data whose artifact is not in any frames file (record §6.4 orphans).
+ARTIFACT_ORPHAN_DATA_UUID = "00000000-0000-0000-0000-0000000a00ff"
+
+# Edge-set artifacts (record §10).
+ARTIFACT_INTEGRITY_UUID = "00000000-0000-0000-0000-0000000a0e01"
+ARTIFACT_NO_VERSIONS_UUID = "00000000-0000-0000-0000-0000000a0e02"
+ARTIFACT_ACTIVE_MISSING_UUID = "00000000-0000-0000-0000-0000000a0e03"
+ARTIFACT_UNKNOWN_KIND_UUID = "00000000-0000-0000-0000-0000000a0e04"
+ARTIFACT_BAD_COMMENTS_UUID = "00000000-0000-0000-0000-0000000a0e05"
+
+ROUTINE_CRON_ID = "trig_01SYNTHETICCRON00000001"
+ROUTINE_ONCE_ID = "trig_01SYNTHETICONCE00000002"
+ROUTINE_ABSENT_ID = "trig_01SYNTHETICGONE00000003"
+
+ARTIFACT_URL_BASE = "https://example.invalid/artifact/"
+FONT_URL = "https://fonts.example.invalid/css2?family=Synthetic+Sans"
+
+
+def _iso(seconds: int) -> str:
+    # artifact.json timestamps use the explicit-offset form (V6).
+    return datetime.fromtimestamp(seconds, tz=UTC).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+
+def _version(seconds: int, suffix: str, title: str, description: str) -> dict[str, Any]:
+    """A versions[] entry whose id embeds its created_at seconds (V6)."""
+    return {
+        "id": f"{seconds}-{suffix}",
+        "title": title,
+        "description": description,
+        "created_at": _iso(seconds),
+    }
+
+
+def _artifact_json(
+    artifact_id: str,
+    kind: str,
+    versions: list[dict[str, Any]],
+    active: str | None,
+    *,
+    visibility: str = "private",
+    updated_at: str | None = None,
+) -> bytes:
+    record = {
+        "id": artifact_id,
+        "kind": kind,
+        "visibility": visibility,
+        "owner_account": ACCOUNT_UUID,
+        "updated_at": updated_at or (versions[0]["created_at"] if versions else _iso(1788000000)),
+        "active_version": active,
+        "versions": versions,
+    }
+    return json.dumps(record, indent=2).encode("utf-8")
+
+
+SINGLE_VERSION = _version(1788100000, "a1b2", "Synthetic colour card", "A one-page card.")
+
+SINGLE_HTML = (
+    "<!doctype html>\n"
+    '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+    "<title>Synthetic colour card</title>\n"
+    f'<link rel="stylesheet" href="{FONT_URL}">\n'
+    "<style>\n"
+    "  body { font-family: 'Synthetic Sans', sans-serif; background: #ffffff; color: #1a1a1a; }\n"
+    "  @media (prefers-color-scheme: dark) {\n"
+    "    body { background: #161616; color: #eeeeee; }\n"
+    "  }\n"
+    "</style>\n</head>\n<body>\n"
+    "<h1>Synthetic colour card</h1>\n"
+    "<p>A static page with no scripts, styled for light and dark.</p>\n"
+    "</body>\n</html>\n"
+)
+
+# Three versions listed out of chronological order; the active one is the
+# middle version, not the newest (V7).
+MULTI_VERSIONS = [
+    _version(1789500000, "c3d4", "Synthetic reading log", "Second draft — the active one."),
+    _version(1790000000, "e5f6", "Synthetic reading log", "Newest draft, not yet active."),
+    _version(1789000000, "a7b8", "Synthetic reading log", "First draft."),
+]
+MULTI_ACTIVE = MULTI_VERSIONS[0]["id"]
+
+# A few bytes standing in for a woff2 font — never decoded, only served.
+FAKE_WOFF2 = b"wOF2\x00\x01\x00\x00synthetic-font-bytes"
+
+CAPABILITY_JSON = {
+    "v": 1,
+    "source": "db",
+    "db": {"meta": {"title": "Synthetic reading log"}, "collections": [{"name": "log_entries"}]},
+}
+
+
+def _multi_entry_html(label: str) -> str:
+    return (
+        "<!doctype html>\n"
+        '<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+        "<title>Synthetic reading log</title>\n"
+        '<link rel="stylesheet" href="assets/style.css">\n'
+        "</head>\n<body>\n"
+        f'<main id="app"><h1>Synthetic reading log</h1><p class="draft">{label}</p></main>\n'
+        "<script>document.getElementById('app').dataset.scriptRan = 'yes';</script>\n"
+        "</body>\n</html>\n"
+    )
+
+
+MULTI_CSS = (
+    "@font-face { font-family: 'Synthetic Mono'; src: url('font.woff2') format('woff2'); }\n"
+    "body { font-family: 'Synthetic Mono', monospace; }\n"
+    ".draft { color: #2a6fbb; }\n"
+)
+
+
+def _multi_version_files(label: str) -> list[tuple[str, str, bytes]]:
+    """``(path, mime_type, bytes)`` for one multi-file version (V8, V9, V13)."""
+    return [
+        ("index.html", "text/html", _multi_entry_html(label).encode("utf-8")),
+        ("assets/style.css", "text/css", MULTI_CSS.encode("utf-8")),
+        ("assets/font.woff2", "font/woff2", FAKE_WOFF2),
+        (
+            "content/entries.md",
+            "text/markdown",
+            (
+                "# Reading log\n\n- First synthetic entry\n" f"- Second synthetic entry ({label})\n"
+            ).encode(),
+        ),
+        (
+            "content/about.md",
+            "text/markdown",
+            b"## About\n\nThis log is entirely synthetic test content.\n",
+        ),
+        (
+            "capability.json",
+            "application/json",
+            json.dumps(CAPABILITY_JSON, indent=2).encode("utf-8"),
+        ),
+    ]
+
+
+def _files_json(files: list[tuple[str, str, bytes]]) -> bytes:
+    return json.dumps(
+        {
+            "files": [
+                {
+                    "original_path": path,
+                    "exported_as": path,
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                    "size_bytes": len(data),
+                    "mime_type": mime,
+                }
+                for path, mime, data in files
+            ]
+        },
+        indent=2,
+    ).encode("utf-8")
+
+
+def _multi_file_members(
+    artifact_id: str, version_id: str, files: list[tuple[str, str, bytes]]
+) -> dict[str, bytes]:
+    base = f"artifacts/{artifact_id}/versions/{version_id}"
+    members = {f"{base}.files.json": _files_json(files)}
+    for path, _mime, data in files:
+        members[f"{base}/{path}"] = data
+    return members
+
+
+PAGE_VERSION = _version(1788800000, "9d0e", "Synthetic shared notes", "A document page.")
+
+PAGE_MARKDOWN = (
+    "# Synthetic shared notes\n\n"
+    "A document-kind artifact whose content is this Markdown file.\n\n"
+    "- First point\n- Second point with **emphasis**\n"
+)
+
+PAGE_COMMENTS = [
+    {
+        "resolved": True,
+        "tab": "main",
+        "quoted_text": "First point",
+        "comments": [
+            {"body": "Synthetic resolved remark.", "created_at": "2026-09-10T08:00:00.120Z"},
+            {
+                "body": "Synthetic reply closing the thread.",
+                "created_at": "2026-09-10T09:00:00.480Z",
+            },
+        ],
+    },
+    {
+        "resolved": False,
+        "tab": "main",
+        "quoted_text": "Second point",
+        "comments": [
+            {"body": "Synthetic open question.", "created_at": "2026-09-11T10:30:00.007Z"},
+        ],
+    },
+]
+
+
+def _single_artifact_members() -> dict[str, bytes]:
+    base = f"artifacts/{ARTIFACT_SINGLE_UUID}"
+    return {
+        f"{base}/artifact.json": _artifact_json(
+            ARTIFACT_SINGLE_UUID, "artifact", [SINGLE_VERSION], SINGLE_VERSION["id"]
+        ),
+        f"{base}/versions/{SINGLE_VERSION['id']}.html": SINGLE_HTML.encode("utf-8"),
+    }
+
+
+def _multi_artifact_members() -> dict[str, bytes]:
+    base = f"artifacts/{ARTIFACT_MULTI_UUID}"
+    members = {
+        f"{base}/artifact.json": _artifact_json(
+            ARTIFACT_MULTI_UUID,
+            "artifact",
+            MULTI_VERSIONS,
+            MULTI_ACTIVE,
+            updated_at=MULTI_VERSIONS[1]["created_at"],
+        )
+    }
+    for version in MULTI_VERSIONS:
+        members.update(
+            _multi_file_members(
+                ARTIFACT_MULTI_UUID,
+                version["id"],
+                _multi_version_files(version["description"]),
+            )
+        )
+    return members
+
+
+def _page_artifact_members() -> dict[str, bytes]:
+    base = f"artifacts/{ARTIFACT_PAGE_UUID}"
+    return {
+        f"{base}/artifact.json": _artifact_json(
+            ARTIFACT_PAGE_UUID, "page", [PAGE_VERSION], PAGE_VERSION["id"]
+        ),
+        f"{base}/shared-notes.md": PAGE_MARKDOWN.encode("utf-8"),
+        f"{base}/comments.json": json.dumps(PAGE_COMMENTS, indent=2).encode("utf-8"),
+    }
+
+
+def _frames_files() -> dict[str, bytes]:
+    return {
+        **_single_artifact_members(),
+        **_multi_artifact_members(),
+        **_page_artifact_members(),
+    }
+
+
+def _data_file(collection: str, documents: list[dict[str, Any]]) -> bytes:
+    return json.dumps(
+        {"documents": [{"collection": collection, **doc} for doc in documents]}, indent=2
+    ).encode("utf-8")
+
+
+def _artifact_data_files() -> dict[str, bytes]:
+    return {
+        f"artifacts/{ARTIFACT_MULTI_UUID}/data/entries.json": _data_file(
+            "log_entries",
+            [
+                {
+                    "id": "entry-0001",
+                    "created_at": "2026-09-12T12:00:00.000000+00:00",
+                    "updated_at": "2026-09-12T12:00:00.000000+00:00",
+                    "data": {"book": "Synthetic Title One", "page_count": 120, "finished": True},
+                },
+                {
+                    "id": "entry-0002",
+                    "created_at": "2026-09-13T12:00:00.000000+00:00",
+                    "updated_at": "2026-09-14T08:00:00.000000+00:00",
+                    "data": {"book": "Synthetic Title Two", "page_count": 45, "tags": ["a", "b"]},
+                },
+            ],
+        ),
+        f"artifacts/{ARTIFACT_MULTI_UUID}/data/settings.json": _data_file(
+            "log_settings",
+            [
+                {
+                    "id": "prefs",
+                    "created_at": "2026-09-12T12:00:00.000000+00:00",
+                    "updated_at": "2026-09-12T12:00:00.000000+00:00",
+                    "data": {"theme": "dark"},
+                }
+            ],
+        ),
+        f"artifacts/{ARTIFACT_ORPHAN_DATA_UUID}/data/notes.json": _data_file(
+            "notes",
+            [
+                {
+                    "id": "note-1",
+                    "created_at": "2026-09-01T07:00:00.000000+00:00",
+                    "updated_at": "2026-09-01T07:00:00.000000+00:00",
+                    "data": {"text": "Synthetic data whose artifact is not in the export."},
+                }
+            ],
+        ),
+    }
+
+
+def _routines() -> list[dict[str, Any]]:
+    return [
+        {
+            "routine_id": ROUTINE_CRON_ID,
+            "agent_id": None,
+            "name": "Synthetic weekly tidy-up",
+            "prompt": "Review the synthetic repository and summarise open items.",
+            "prompt_withheld": False,
+            "enabled": True,
+            "schedule": {"cron": "0 9 * * 1", "run_once_at": None},
+            "created_at": "2026-09-01T09:00:00.250000Z",
+            "updated_at": "2026-09-02T09:00:00.250000Z",
+            "ended_at": None,
+        },
+        {
+            "routine_id": ROUTINE_ONCE_ID,
+            "agent_id": None,
+            "name": "Synthetic one-off check",
+            "prompt": "",
+            "prompt_withheld": True,
+            "enabled": False,
+            "schedule": {"cron": None, "run_once_at": "2026-09-20T15:30:00Z"},
+            "created_at": "2026-09-15T10:00:00.500000Z",
+            "updated_at": "2026-09-15T10:00:00.500000Z",
+            "ended_at": None,
+        },
+    ]
+
+
+def _routine_runs() -> list[dict[str, Any]]:
+    def run(routine: str, day: int, session: str) -> dict[str, Any]:
+        return {
+            "routine_id": routine,
+            "scheduled_for": f"2026-09-{day:02d}T09:00:00Z",
+            # Run timestamps carry six to nine fractional digits.
+            "started_at": f"2026-09-{day:02d}T09:00:04.123456789Z",
+            "finished_at": f"2026-09-{day:02d}T09:03:41.654321Z",
+            "status": "succeeded",
+            "session_id": f"cse_01SYNTHETICSESSION{session}",
+        }
+
+    return [
+        run(ROUTINE_CRON_ID, 8, "0001"),
+        run(ROUTINE_CRON_ID, 15, "0002"),
+        # A run whose routine is not in routines.json (record §10, D9 orphans).
+        run(ROUTINE_ABSENT_ID, 3, "0003"),
+    ]
+
+
+def _claude_code_cloud_files() -> dict[str, bytes]:
+    return {
+        "claude_code_cloud/routines.json": json.dumps(
+            {"claude_code_cloud": _routines()}, indent=2
+        ).encode("utf-8"),
+        "claude_code_cloud/routine_runs.json": json.dumps(
+            {"claude_code_cloud": _routine_runs()}, indent=2
+        ).encode("utf-8"),
+    }
+
+
+def _frames_part0_files() -> dict[str, bytes]:
+    return {**_single_artifact_members(), **_page_artifact_members()}
+
+
+def _frames_part1_files() -> dict[str, bytes]:
+    """Part 1 carries the multi-file artifact plus a mutated duplicate of the
+    single-HTML artifact (same id, different title) — kept once, flagged."""
+    duplicate_version = dict(SINGLE_VERSION, title="Synthetic colour card (duplicate part)")
+    base = f"artifacts/{ARTIFACT_SINGLE_UUID}"
+    return {
+        **_multi_artifact_members(),
+        f"{base}/artifact.json": _artifact_json(
+            ARTIFACT_SINGLE_UUID, "artifact", [duplicate_version], duplicate_version["id"]
+        ),
+        f"{base}/versions/{SINGLE_VERSION['id']}.html": SINGLE_HTML.encode("utf-8"),
+    }
+
+
+def _frames_edge_files() -> dict[str, bytes]:
+    """Every frames preserve-and-flag case in one set (record §6.1, §10)."""
+    members: dict[str, bytes] = {}
+
+    # Integrity: one hash mismatch, one size mismatch, one listed file
+    # missing, one file present but unlisted.
+    version = _version(1789200000, "0b0b", "Synthetic integrity case", "Damaged files.")
+    files = _multi_version_files("integrity")
+    listing = json.loads(_files_json(files))
+    listing["files"][1]["sha256"] = "0" * 64  # assets/style.css: hash mismatch
+    listing["files"][2]["size_bytes"] += 1  # assets/font.woff2: size mismatch
+    base = f"artifacts/{ARTIFACT_INTEGRITY_UUID}"
+    vbase = f"{base}/versions/{version['id']}"
+    members[f"{base}/artifact.json"] = _artifact_json(
+        ARTIFACT_INTEGRITY_UUID, "artifact", [version], version["id"]
+    )
+    members[f"{vbase}.files.json"] = json.dumps(listing, indent=2).encode("utf-8")
+    for path, _mime, data in files:
+        if path != "content/about.md":  # listed but missing from the export
+            members[f"{vbase}/{path}"] = data
+    members[f"{vbase}/extra/unlisted.txt"] = b"present but not in the file list\n"
+
+    # Zero versions and no active version.
+    members[f"artifacts/{ARTIFACT_NO_VERSIONS_UUID}/artifact.json"] = _artifact_json(
+        ARTIFACT_NO_VERSIONS_UUID, "artifact", [], None
+    )
+
+    # Active version not in the list; the listed version has no files.
+    listed = _version(1789300000, "1c1c", "Synthetic dangling active", "No files exported.")
+    members[f"artifacts/{ARTIFACT_ACTIVE_MISSING_UUID}/artifact.json"] = _artifact_json(
+        ARTIFACT_ACTIVE_MISSING_UUID, "artifact", [listed], "1789399999-ffff"
+    )
+
+    # Unknown kind and visibility values, preserved raw.
+    odd = _version(1789400000, "2d2d", "Synthetic future kind", "A kind this viewer predates.")
+    base = f"artifacts/{ARTIFACT_UNKNOWN_KIND_UUID}"
+    members[f"{base}/artifact.json"] = _artifact_json(
+        ARTIFACT_UNKNOWN_KIND_UUID, "widget", [odd], odd["id"], visibility="link_shared"
+    )
+    members[f"{base}/versions/{odd['id']}.html"] = SINGLE_HTML.encode("utf-8")
+
+    # A page whose comments file is unreadable and which has no content file.
+    page = _version(1789450000, "3e3e", "Synthetic broken page", "Unreadable comments.")
+    base = f"artifacts/{ARTIFACT_BAD_COMMENTS_UUID}"
+    members[f"{base}/artifact.json"] = _artifact_json(
+        ARTIFACT_BAD_COMMENTS_UUID, "page", [page], page["id"]
+    )
+    members[f"{base}/comments.json"] = b'{"this is": not valid JSON'
+    return members
+
+
+def _current_memories_without_files() -> dict[str, bytes]:
+    """A current memories file with no memory files — the summary stays the
+    export's memory (record §7: not legacy)."""
+    memories = _current_memories()
+    memories["memory_files"] = []
+    return _memories_zip(memories)
+
+
+def _legacy_with_login_history_files() -> dict[str, bytes]:
+    """The legacy happy path plus a root-level login_history.json (V21)."""
+    files = _happy_path_files()
+    files["login_history.json"] = json.dumps(_login_history(), indent=2).encode("utf-8")
+    return files
+
+
 # Each set entry maps an output filename to its builder; a dict result is
 # written as a deterministic zip, raw bytes are written verbatim.
 FIXTURE_SETS: dict[str, dict[str, Any]] = {
@@ -1139,6 +1664,25 @@ FIXTURE_SETS: dict[str, dict[str, Any]] = {
     },
     "current_dangling": {
         "memories-000.zip": _current_memories_dangling_files,
+    },
+    # Record §10 edge sets for the three later categories.
+    "current_new_only": {
+        "frames-000.zip": _frames_files,
+        "artifact_data-000.zip": _artifact_data_files,
+        "claude_code_cloud-000.zip": _claude_code_cloud_files,
+    },
+    "current_frames_two_part": {
+        "frames-000.zip": _frames_part0_files,
+        "frames-001.zip": _frames_part1_files,
+    },
+    "current_frames_edge": {
+        "frames-000.zip": _frames_edge_files,
+    },
+    "current_empty_frames": {
+        "frames-000.zip": dict,
+    },
+    "current_memories_no_files": {
+        "memories-000.zip": _current_memories_without_files,
     },
 }
 
@@ -1166,6 +1710,7 @@ RAW_FIXTURES: dict[str, bytes] = {
 
 FIXTURES: dict[str, callable[[], dict[str, bytes]]] = {
     "synthetic_export.zip": _happy_path_files,
+    "synthetic_export_login_history.zip": _legacy_with_login_history_files,
     "bad_missing_users.zip": _bad_missing_users,
     "bad_missing_conversations.zip": _bad_missing_conversations,
     "bad_missing_memories.zip": _bad_missing_memories,
