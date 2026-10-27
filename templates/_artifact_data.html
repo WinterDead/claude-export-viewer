@@ -1,0 +1,16 @@
+{# Saved data (v1.4.0, export-categories record §6.4, copy D8): grouped by
+   collection; each document collapsed, its id and timestamps as the summary,
+   its data as formatted JSON — an open set, no field interpreted. #}
+{% macro data_groups(groups) %}
+  {% for group in groups %}
+    <section class="artifact-data-group">
+      <h3>Collection: {{ group.collection }}</h3>
+      {% for doc in group.documents %}
+        <details class="collapsible artifact-data-doc">
+          <summary><code>{{ doc.id }}</code> · {{ doc.created_at | format_local }} · {{ doc.updated_at | format_local }}</summary>
+          <pre class="artifact-data-json">{{ doc.data | pretty_json }}</pre>
+        </details>
+      {% endfor %}
+    </section>
+  {% endfor %}
+{% endmacro %}

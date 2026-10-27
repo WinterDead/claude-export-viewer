@@ -37,6 +37,9 @@ from pathlib import Path
 from flask import Flask, request
 from flask_wtf.csrf import CSRFProtect
 
+# Importing artifact_views registers the Artifacts and Scheduled tasks views on
+# the blueprint (v1.4.0).
+from viewer.artifact_views import artifact_refs, nav_flags, viewed_artifact_ids
 from viewer.cache import load_or_build, set_fingerprint, zip_hash
 from viewer.db import close_db, get_db
 from viewer.history import init_db as init_history_db
@@ -253,6 +256,9 @@ def create_app(
     # sentinel is spelled in exactly one place.
     app.jinja_env.globals["NO_PROJECT_SENTINEL"] = NO_PROJECT_SENTINEL
     app.jinja_env.globals["NO_PROJECT_LABEL"] = NO_PROJECT_LABEL
+    # The reading view's "Open in Artifacts" link (export-categories §6.5).
+    app.jinja_env.globals["artifact_refs"] = artifact_refs
+    app.jinja_env.globals["viewed_artifact_ids"] = viewed_artifact_ids
 
     # Inject only the small dict the layout chrome needs — never the full
     # ``Export`` or ``User`` objects. Otherwise a careless ``{{ export }}``
@@ -312,6 +318,9 @@ def create_app(
             # Nav rule (record §8): the Account entry shows whenever
             # users.json is in the viewed set, both formats.
             "g_has_account": live_export.user is not None,
+            # Artifacts and Scheduled tasks follow the same rule for their
+            # categories (export-categories record §6.2, D9).
+            **nav_flags(live_export),
             # Theme (v1.3.0 Session T): the viewer_theme cookie, clamped to
             # the known values — an absent or mangled cookie renders as
             # System (follow the OS preference).

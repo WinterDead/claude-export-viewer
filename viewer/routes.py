@@ -852,6 +852,8 @@ def search_view() -> str:
         memory_orphans=memory_orphans,
         result_limit=SEARCH_RESULT_LIMIT,
         legacy_memory=legacy_memory_state(export),
+        artifact_hits=[h for h in results.hits if h.kind == "artifact"],
+        task_hits=[h for h in results.hits if h.kind == "scheduled_task"],
     )
 
 

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% from "_artifact_data.html" import data_groups as render_data_groups %}
+
+{% block title %}{{ artifact.title or artifact.id }} — Published artifacts — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<article class="artifact-detail">
+  {# Order and copy per export-categories record §6.2 and D8, byte-exact:
+     title, type and visibility, description, version picker, content area,
+     files, comments, saved data, mentions. #}
+  <header class="page-header">
+    <h1>{{ artifact.title or artifact.id }}</h1>
+    <p class="artifact-meta">{{ type_label(artifact.kind) }} · {{ visibility_label(artifact.visibility) }}</p>
+    {% if version and version.description %}
+      <p class="lede artifact-description">{{ version.description }}</p>
+    {% endif %}
+  </header>
+
+  {% if artifact.versions %}
+    {# Hundreds of versions stay a plain list; nothing loads until one is
+       selected (record §10). #}
+    <nav class="artifact-versions" aria-label="Version">
+      <h2>Version</h2>
+      <ul class="artifact-version-list">
+        {% for v in artifact.versions %}
+          <li{% if version and v.id == version.id %} class="current"{% endif %}>
+            <a href="{{ url_for('viewer.artifact_detail', artifact_id=artifact.id, version=v.id) }}"{% if version and v.id == version.id %} aria-current="page"{% endif %}>{{ v.title or v.id }}</a>
+            {% if v.id == artifact.active_version %}<span class="badge artifact-active-badge">Active version</span>{% endif %}
+            <span class="artifact-version-created">Created {{ v.created_at | format_local }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    </nav>
+  {% endif %}
+
+  <section class="artifact-content">
+    {% if artifact.kind == 'page' %}
+      {# A page renders its Markdown through the existing pipeline — no iframe,
+         no new sanitiser surface (record §6.2). #}
+      {% if page_markdown is not none %}
+        <div class="markdown-body artifact-page-body">{{ page_markdown | markdown }}</div>
+        <p class="artifact-actions"><a class="button" href="{{ url_for('viewer.artifact_page_download', artifact_id=artifact.id) }}">Download</a></p>
+      {% else %}
+        <p class="empty">This version has no files in the export.</p>
+      {% endif %}
+    {% elif not version or version.layout == LAYOUT_NONE %}
+      <p class="empty">This version has no files in the export.</p>
+    {% elif preview %}
+      <h2>Preview</h2>
+      {% if preview.scripts %}
+        <p class="warn artifact-notice">This page uses scripts, which the viewer doesn't run, so the preview may be incomplete. Its content files are listed below.</p>
+      {% endif %}
+      {% if preview.external %}
+        <p class="warn artifact-notice">Fonts and other resources from the web are blocked, so the preview may look a little different from the original.</p>
+      {% endif %}
+      {# Record §6.3: sandboxed, no scripts, no network — the sandbox grants
+         nothing (no allow-scripts, no allow-same-origin), and every file the
+         frame loads carries its own sandboxing CSP. #}
+      <iframe class="artifact-preview" sandbox="{{ sandbox }}" src="{{ preview.src }}" title="Preview" referrerpolicy="no-referrer" loading="lazy"></iframe>
+      <p class="artifact-preview-print">Preview not printed.</p>
+      <p class="artifact-actions"><a class="button" href="{{ url_for('viewer.artifact_download', artifact_id=artifact.id, version_id=version.id) }}">Download</a></p>
+      {# View source: the entry HTML through the existing highlighter, open
+         when short and collapsed by A5's rule when long. #}
+      {% if preview.source_fold_lines %}
+        <details class="collapsible artifact-source">
+          <summary>View source ({{ preview.source_fold_lines }} line{% if preview.source_fold_lines != 1 %}s{% endif %})</summary>
+          <div class="markdown-body"><pre><code class="language-html">{{ preview.source }}</code></pre></div>
+        </details>
+      {% else %}
+        <section class="artifact-source">
+          <h3>View source</h3>
+          <div class="markdown-body"><pre><code class="language-html">{{ preview.source }}</code></pre></div>
+        </section>
+      {% endif %}
+    {% else %}
+      <p class="empty">This version has no files in the export.</p>
+    {% endif %}
+  </section>
+
+  {% if version and version.layout == LAYOUT_MULTI_FILE %}
+    <section class="artifact-files">
+      <h2>Files</h2>
+      <table class="artifact-file-table">
+        <thead><tr><th>Path</th><th>Type</th><th>Size</th><th>Check</th></tr></thead>
+        <tbody>
+          {% for f in version.files %}
+            <tr>
+              <td><code>{{ f.path }}</code></td>
+              <td>{{ f.mime_type }}</td>
+              <td>{% if f.size_bytes is not none %}{{ "{:,}".format(f.size_bytes) }} bytes{% else %}—{% endif %}</td>
+              <td>{% if not f.present %}Missing from the export{% elif not f.ok %}Doesn't match the export's record{% else %}OK{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+    {% if content_files %}
+      <section class="artifact-content-files">
+        <h2>Content files</h2>
+        {% for cf in content_files %}
+          <details class="collapsible artifact-content-file">
+            <summary><code>{{ cf.path }}</code></summary>
+            <div class="markdown-body">{{ cf.body | markdown }}</div>
+          </details>
+        {% endfor %}
+      </section>
+    {% endif %}
+  {% endif %}
+
+  {% if artifact.kind == 'page' and artifact.comments is not none %}
+    {# Comments render as a list with their quoted text (record §11: not
+       anchored in the text). Omitted when there is no comments file. #}
+    <section class="artifact-comments">
+      <h2>Comments</h2>
+      {% for thread in artifact.comments %}
+        <article class="artifact-thread">
+          <p class="artifact-thread-quote">On “{{ thread.quoted_text }}”{% if thread.resolved %} <span class="badge artifact-resolved-badge">Resolved</span>{% endif %}</p>
+          <ul class="artifact-thread-comments">
+            {% for c in thread.comments %}
+              <li><span class="artifact-comment-date">{{ c.created_at | format_local }}</span> {{ c.body }}</li>
+            {% endfor %}
+          </ul>
+        </article>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  {% if data_groups %}
+    <section class="artifact-saved-data">
+      <h2>Saved data</h2>
+      {{ render_data_groups(data_groups) }}
+    </section>
+  {% endif %}
+
+  <section class="artifact-mentions">
+    <h2>Mentioned in conversations</h2>
+    {% if mentions %}
+      <ul>
+        {% for conv in mentions %}
+          <li><a href="{{ url_for('viewer.conversation_detail', uuid=conv.uuid) }}">{{ conv | display_title }}</a></li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">Not mentioned in any conversation in this export.</p>
+    {% endif %}
+  </section>
+</article>
+{% endblock %}

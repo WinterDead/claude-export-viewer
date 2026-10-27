@@ -690,6 +690,14 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
   `artifact` and `scheduled_task` with an `entity_id` column, invariant in lockstep; the
   parse-cache key covers `parser.py` and `categories.py`; uploads remap `source_paths` to
   the stored set.
+- **v1.4.0 pages and the sandbox** (phase 5). Locked: `viewer/artifact_views.py`
+  (Artifacts list and detail, artifact-file route, in-memory downloads, Scheduled tasks);
+  nav entries shown only with their categories (Artifacts after Memory, Scheduled tasks
+  after Artifacts); the preview is `<iframe sandbox="">` and every artifact-file response
+  carries the sandboxing CSP (`script-src 'none'`, no remote source, `sandbox`), `nosniff`,
+  and the recorded MIME type; files served by lookup in the recorded list only; fonts carry
+  `Access-Control-Allow-Origin: null` (flagged for review); the preview prints as its
+  heading plus `Preview not printed.`.
 
 ### Later (unscheduled, non-blocking)
 

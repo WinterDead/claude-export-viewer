@@ -219,6 +219,36 @@
       </section>
     {% endif %}
 
+    {# ---------- Published artifacts and scheduled tasks (v1.4.0,
+         export-categories record §6.6): hits link to the artifact page or
+         the task's row. Headings reuse the pages' D8/D9 headings. ---------- #}
+    {% if artifact_hits %}
+      <section class="search-section">
+        <h2>Published artifacts</h2>
+        {% for hit in artifact_hits %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.artifact_detail', artifact_id=hit.entity_id) }}">{{ hit.title or hit.entity_id }}</a>
+            </h3>
+            <div class="search-snippet">{{ hit.snippet | search_snippet }}</div>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+    {% if task_hits %}
+      <section class="search-section">
+        <h2>Scheduled tasks</h2>
+        {% for hit in task_hits %}
+          <article class="search-group">
+            <h3 class="search-group-title">
+              <a href="{{ url_for('viewer.scheduled_tasks') }}#task-{{ hit.entity_id }}">{{ hit.title or hit.entity_id }}</a>
+            </h3>
+            <div class="search-snippet">{{ hit.snippet | search_snippet }}</div>
+          </article>
+        {% endfor %}
+      </section>
+    {% endif %}
+
     {# ---------- Memory hits ---------- #}
     {% if memory_global or memory_files or memory_orphans %}
       <section class="search-section">

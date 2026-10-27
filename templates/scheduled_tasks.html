@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% macro run_table(runs) %}
+  <table class="task-run-table">
+    <thead><tr><th>Scheduled for</th><th>Started</th><th>Finished</th><th>Status</th><th>Session</th></tr></thead>
+    <tbody>
+      {% for r in runs %}
+        <tr>
+          <td>{{ r.scheduled_for | format_local }}</td>
+          <td>{{ r.started_at | format_local }}</td>
+          <td>{{ r.finished_at | format_local }}</td>
+          <td>{{ r.status }}</td>
+          {# The export carries no session content; the id is text (record §11). #}
+          <td><code>{{ r.session_id }}</code></td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endmacro %}
+
+{% block title %}Scheduled tasks — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="tasks-page">
+  {# Copy D9 (v1.4.0), byte-exact. #}
+  <header class="page-header">
+    <h1>Scheduled tasks</h1>
+  </header>
+
+  {% if tasks %}
+    <table class="task-table">
+      <thead><tr><th>Name</th><th>Schedule</th><th>Enabled</th><th>Created</th><th>Last run</th></tr></thead>
+      <tbody>
+        {% for t in tasks %}
+          {% set runs = runs_by_task.get(t.routine_id, []) %}
+          <tr id="task-{{ t.routine_id }}">
+            <td>{{ t.name }}</td>
+            <td>{% if t.cron %}Repeats: <code>{{ t.cron }}</code>{% elif t.run_once_at %}Once: {{ t.run_once_at | format_local }}{% else %}—{% endif %}</td>
+            <td>{% if t.enabled %}Yes{% else %}No{% endif %}</td>
+            <td>{{ t.created_at | format_local }}</td>
+            <td>{% if runs %}{{ runs[0].scheduled_for | format_local }}{% else %}Never{% endif %}</td>
+          </tr>
+          <tr class="task-prompt-row">
+            <td colspan="5">
+              <details class="collapsible task-prompt">
+                <summary>Prompt</summary>
+                {% if t.prompt_withheld %}
+                  <p class="empty">The prompt was withheld from the export.</p>
+                {% else %}
+                  <div class="markdown-body">{{ t.prompt | markdown }}</div>
+                {% endif %}
+              </details>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  <section class="task-runs">
+    <h2>Run history</h2>
+    {% for t in tasks %}
+      {% set runs = runs_by_task.get(t.routine_id, []) %}
+      {% if runs %}
+        <h3>{{ t.name }}</h3>
+        {{ run_table(runs) }}
+      {% endif %}
+    {% endfor %}
+  </section>
+
+  {% if orphan_groups %}
+    <section class="task-orphan-runs">
+      <h2>Runs for tasks not in this export</h2>
+      {% for routine_id, runs in orphan_groups %}
+        <h3><code>{{ routine_id }}</code></h3>
+        {{ run_table(runs) }}
+      {% endfor %}
+    </section>
+  {% endif %}
+</section>
+{% endblock %}

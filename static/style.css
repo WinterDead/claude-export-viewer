@@ -1771,16 +1771,103 @@ details.collapsible > summary {
   margin: 0 0 1rem;
 }
 
-.manifest-table {
+.manifest-table,
+.artifact-table,
+.artifact-file-table,
+.task-table,
+.task-run-table {
   border-collapse: collapse;
   margin-top: 0.75rem;
 }
 
 .manifest-table th,
-.manifest-table td {
+.manifest-table td,
+.artifact-table th,
+.artifact-table td,
+.artifact-file-table th,
+.artifact-file-table td,
+.task-table th,
+.task-table td,
+.task-run-table th,
+.task-run-table td {
   border: 1px solid var(--border);
   padding: 0.3rem 0.6rem;
   text-align: left;
+  vertical-align: top;
+}
+
+/* v1.4.0 Artifacts and Scheduled tasks (export-categories record §6). The
+   preview frame is the artifact's own page, sandboxed; everything around it
+   uses the palette tokens, so dark mode follows. */
+.artifact-meta,
+.artifact-version-created,
+.artifact-comment-date {
+  color: var(--muted);
+}
+
+.artifact-version-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.artifact-version-list li {
+  padding: 0.2rem 0;
+}
+
+.artifact-version-list li.current > a {
+  font-weight: 600;
+}
+
+.artifact-preview {
+  display: block;
+  width: 100%;
+  min-height: 32rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+
+/* Shown only in print, in the frame's place (copy U4). */
+.artifact-preview-print {
+  display: none;
+}
+
+.artifact-actions a.button,
+.artifact-actions .button {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--link);
+  text-decoration: none;
+}
+
+.artifact-thread {
+  border-left: 3px solid var(--border);
+  padding-left: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.artifact-thread-quote {
+  font-style: italic;
+  margin: 0;
+}
+
+.artifact-data-json {
+  background: var(--code-bg);
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+
+.block-card-artifact-link {
+  display: inline-block;
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.task-prompt-row td {
+  border-top: none;
 }
 
 .block-document .block-card-meta {
@@ -2079,6 +2166,17 @@ details.collapsible > summary {
   .help-controls,
   .memory-block-controls {
     display: none !important;
+  }
+
+  /* The artifact preview doesn't print (copy U4): its heading prints, with a
+     one-line placeholder in the frame's place. */
+  .artifact-preview,
+  .artifact-actions {
+    display: none !important;
+  }
+
+  .artifact-preview-print {
+    display: block;
   }
 
   /* Messages should print as a continuous thread, not boxed cards. */

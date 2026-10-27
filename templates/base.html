@@ -49,6 +49,14 @@
         <li><a href="{{ url_for('viewer.conversation_list') }}">Conversations</a></li>
         <li><a href="{{ url_for('viewer.project_list') }}">Projects</a></li>
         <li><a href="{{ url_for('viewer.memory_view') }}">Memory</a></li>
+        {% if g_has_artifacts %}
+          {# v1.4.0 (export-categories record §6.2, D8/D9): shown only when the
+             viewed set includes the category, the Account entry's rule. #}
+          <li><a href="{{ url_for('viewer.artifact_list') }}">Artifacts</a></li>
+        {% endif %}
+        {% if g_has_scheduled_tasks %}
+          <li><a href="{{ url_for('viewer.scheduled_tasks') }}">Scheduled tasks</a></li>
+        {% endif %}
         {% if g_has_account %}
           {# Present whenever users.json is in the viewed set — both formats
              (v1.3.0, record §8); hidden otherwise. #}

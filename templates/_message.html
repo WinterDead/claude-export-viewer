@@ -67,6 +67,16 @@
   {% endif %}
 {% endmacro %}
 
+{% macro open_in_artifacts(block) %}
+  {# v1.4.0 (export-categories record §6.5, provisional): a tool block whose
+     input or structured content names an artifact in the loaded set links to
+     it. Copy D8. #}
+  {% for aid in artifact_refs(block, known_artifacts) %}
+    <a class="block-card-artifact-link" href="{{ url_for('viewer.artifact_detail', artifact_id=aid) }}">Open in Artifacts</a>
+  {% endfor %}
+{% endmacro %}
+
+{% set known_artifacts = viewed_artifact_ids() %}
 <article class="msg msg-{{ msg.sender }}" id="msg-{{ msg.uuid }}">
   <header class="msg-header">
     <span class="msg-sender">{{ msg.sender | sender_label }}</span>
@@ -130,6 +140,7 @@
           {% if block.display_content %}
             {{ display_content_body(block.display_content, block.message or block.name) }}
           {% endif %}
+          {{ open_in_artifacts(block) }}
         </aside>
       {% elif bt == 'tool_result' %}
         <aside class="block-card block-tool-result {% if block.is_error %}is-error{% endif %}">
@@ -150,6 +161,7 @@
               {% endif %}
             {% endfor %}
           {% endif %}
+          {{ open_in_artifacts(block) }}
         </aside>
       {% elif bt == 'injected_prompt' %}
         {# Record §9.1: a labelled collapsible card, collapsed by default. #}

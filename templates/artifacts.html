@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Published artifacts — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="artifacts-page">
+  {# Copy D8 (v1.4.0, export-categories record §6.2), byte-exact. The list
+     never inlines artifact bodies (record §10). #}
+  <header class="page-header">
+    <h1>Published artifacts</h1>
+  </header>
+
+  {% if artifacts %}
+    <nav class="sort-toggle" aria-label="Sort order">
+      <a href="{{ url_for('viewer.artifact_list', sort='updated_desc') }}"
+         class="sort-option{% if sort == 'updated_desc' %} active{% endif %}">
+        Recently updated
+      </a>
+      <a href="{{ url_for('viewer.artifact_list', sort='created_desc') }}"
+         class="sort-option{% if sort == 'created_desc' %} active{% endif %}">
+        Recently created
+      </a>
+      <a href="{{ url_for('viewer.artifact_list', sort='title_asc') }}"
+         class="sort-option{% if sort == 'title_asc' %} active{% endif %}">
+        Title (A–Z)
+      </a>
+    </nav>
+
+    <table class="artifact-table">
+      <thead>
+        <tr><th>Title</th><th>Type</th><th>Versions</th><th>Updated</th></tr>
+      </thead>
+      <tbody>
+        {% for a in artifacts %}
+          <tr>
+            <td><a href="{{ url_for('viewer.artifact_detail', artifact_id=a.id) }}">{{ a.title or a.id }}</a></td>
+            <td>{{ type_label(a.kind) }}</td>
+            <td>{{ a.versions | length }}</td>
+            <td><span title="{{ a.updated_at | format_local }}">{{ a.updated_at | format_local_relative }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if orphan_groups %}
+    {# Record §6.4: data whose artifact is not in the set, preserved. #}
+    <section class="artifact-orphans">
+      <h2>Saved data without a published artifact</h2>
+      {% from "_artifact_data.html" import data_groups %}
+      {{ data_groups(orphan_groups) }}
+    </section>
+  {% endif %}
+</section>
+{% endblock %}
