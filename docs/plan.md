@@ -707,6 +707,11 @@ commits); `main` and the tags follow the phase 8 review. Locked decisions:
   screenshots retaken (the nav changed on every page) and `artifacts.png`,
   `artifact-detail.png`, `scheduled-tasks.png` added, from the synthetic fixture via an
   isolated instance, footer and theme control hidden at capture.
+- **Extra work** (phase 7, documents only): `docs/briefs/v1.4.0-session-u-codebase-review.md`
+  (ranked findings; none fixed in Session U); four unratified proposals in
+  `docs/proposals/` (bare-URL autolinking, embedded-HTML display policy, the export/print
+  options pass, portable tag state); the operator hand-test brief
+  `docs/briefs/v1.4.0-session-u-operator-hand-test.md`.
 
 ### Later (unscheduled, non-blocking)
 
