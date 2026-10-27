@@ -681,6 +681,15 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
   - Launchers (D13): POSIX venv output suppressed with the pointer sentence; Windows probes
     `py -0p` and versioned qualifiers before "too old", and the message mentions the pin.
   - Amendments A5–A8 applied to `docs/format-support-design.md`.
+- **v1.4.0 model, loader, search** (phase 4). Locked: the later categories' models and
+  loaders live in `viewer/categories.py` as fields of the one `Export`; artifact bytes are
+  read on demand (`read_member`, stored set or inspect's in-memory parts) and never enter
+  the model — `search_text` holds visible text and Markdown only (pickle-growth pinned);
+  versions display newest first by `created_at`; every §6.1/§10 case preserved and flagged;
+  owner mismatch logged; mentions from tool `input`/`structured_content` only; FTS kinds
+  `artifact` and `scheduled_task` with an `entity_id` column, invariant in lockstep; the
+  parse-cache key covers `parser.py` and `categories.py`; uploads remap `source_paths` to
+  the stored set.
 
 ### Later (unscheduled, non-blocking)
 

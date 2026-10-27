@@ -25,6 +25,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ClassVar
 
+from viewer.categories import (
+    Artifact,
+    ArtifactDataFile,
+    ScheduledTask,
+    TaskRun,
+    artifact_ids_in,
+    load_artifact_data,
+    load_claude_code_cloud,
+    load_frames,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -169,6 +180,9 @@ class ToolResultBlock:
     # the Markdown pipeline (record §9.6).
     output_format_category: str | None = None
     message: str | None = None
+    # Preserved raw (v1.4.0): an ``Artifact`` publishing result names the
+    # artifact here — the cross-link source of record §6.5.
+    structured_content: Any = None
     start_timestamp: str | None = None
     stop_timestamp: str | None = None
 
@@ -382,6 +396,15 @@ class Export:
     # four core categories (its login history is empty by format unless the
     # archive carries a root login_history.json, V21).
     categories: tuple[str, ...] = ALL_CATEGORIES
+    # The later categories (v1.4.0, export-categories record §6) — metadata only;
+    # artifact file bytes are read on demand, never held here.
+    artifacts: list[Artifact] = field(default_factory=list)
+    artifact_data: list[ArtifactDataFile] = field(default_factory=list)
+    scheduled_tasks: list[ScheduledTask] = field(default_factory=list)
+    task_runs: list[TaskRun] = field(default_factory=list)
+    # Artifact id → uuids of the conversations whose tool blocks name it
+    # (record §6.5, provisional), in conversation order.
+    artifact_mentions: dict[str, list[str]] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -775,10 +798,10 @@ def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Exp
         for category, cat_parts in by_category.items():
             _warn_if_parts_incomplete(category, [display for _, _, display in cat_parts])
 
-        # Later categories (export-categories record §5.1): kept, counted,
-        # validated — not yet displayed. A part that fails validation is
-        # skipped with a WARNING rather than failing the set (the routes
-        # validate first and show D2; this guards stored sets).
+        # Later categories (export-categories record §5.1): validated before
+        # anything else reads them. A part that fails validation is skipped
+        # with a WARNING rather than failing the set (the routes validate
+        # first and show D2; this guards stored sets).
         for category in LATER_CATEGORIES:
             kept = []
             for zf, src, display in by_category.get(category, []):
@@ -852,6 +875,18 @@ def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Exp
                 logger.warning("dangling project memory for uuid not in archive: %s", puid)
                 orphan_memories.append(mem)
 
+        artifacts, artifact_data, tasks, runs = _load_later_categories(by_category)
+        if user is not None:
+            for artifact in artifacts:
+                if artifact.owner_account and artifact.owner_account != user.uuid:
+                    # Mirrors the account-uuid check: logged, never fatal.
+                    logger.warning(
+                        "artifact owner mismatch on %s: owner %s, users.json %s",
+                        artifact.id,
+                        artifact.owner_account,
+                        user.uuid,
+                    )
+
         conversations: list[Conversation] = []
         seen_conv: set[str] = set()
         account_uuid = user.uuid if user is not None else ""
@@ -877,7 +912,79 @@ def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Exp
         memory_files=memory_files,
         login_events=login_events,
         categories=tuple(c for c in KNOWN_CATEGORIES if c in by_category),
+        artifacts=artifacts,
+        artifact_data=artifact_data,
+        scheduled_tasks=tasks,
+        task_runs=runs,
+        artifact_mentions=_artifact_mentions(conversations, {a.id for a in artifacts}),
     )
+
+
+def _load_later_categories(
+    by_category: dict[str, list[tuple[zipfile.ZipFile, str, str]]],
+) -> tuple[list[Artifact], list[ArtifactDataFile], list[ScheduledTask], list[TaskRun]]:
+    """Load the validated later-category parts (export-categories record §6).
+
+    Multi-part ``frames`` merge like the other categories (*provisional*): parts in
+    supplied order, a duplicate artifact id kept once (first occurrence) and flagged.
+    """
+    artifacts: list[Artifact] = []
+    seen: set[str] = set()
+    for zf, _src, display in by_category.get(CATEGORY_FRAMES, []):
+        for artifact in load_frames(zf, display):
+            if artifact.id in seen:
+                logger.warning(
+                    "duplicate artifact id across frames parts: %s — keeping the first",
+                    artifact.id,
+                )
+                continue
+            seen.add(artifact.id)
+            artifacts.append(artifact)
+    artifact_data: list[ArtifactDataFile] = []
+    for zf, _src, _display in by_category.get(CATEGORY_ARTIFACT_DATA, []):
+        artifact_data.extend(load_artifact_data(zf))
+    orphan_data = sorted({d.artifact_id for d in artifact_data} - seen)
+    if orphan_data:
+        logger.warning(
+            "artifact data for %d artifact(s) not in this export — preserved as orphans",
+            len(orphan_data),
+        )
+    tasks: list[ScheduledTask] = []
+    runs: list[TaskRun] = []
+    for zf, _src, _display in by_category.get(CATEGORY_CLAUDE_CODE_CLOUD, []):
+        part_tasks, part_runs = load_claude_code_cloud(zf)
+        tasks.extend(part_tasks)
+        runs.extend(part_runs)
+    known = {t.routine_id for t in tasks}
+    absent = [r for r in runs if r.routine_id not in known]
+    if absent:
+        logger.warning(
+            "%d scheduled-task run(s) name a task not in this export — preserved as orphans",
+            len(absent),
+        )
+    return artifacts, artifact_data, tasks, runs
+
+
+def _artifact_mentions(conversations: list[Conversation], known: set[str]) -> dict[str, list[str]]:
+    """Record §6.5: an artifact is mentioned by a conversation when its id appears in
+    a tool block's ``input`` or ``structured_content``. Prose is not used."""
+    mentions: dict[str, list[str]] = {}
+    if not known:
+        return mentions
+    for conv in conversations:
+        for msg in conv.messages:
+            for block in msg.content:
+                if isinstance(block, ToolUseBlock):
+                    ids = artifact_ids_in(block.input, known)
+                elif isinstance(block, ToolResultBlock):
+                    ids = artifact_ids_in(block.structured_content, known)
+                else:
+                    continue
+                for aid in ids:
+                    convs = mentions.setdefault(aid, [])
+                    if conv.uuid not in convs:
+                        convs.append(conv.uuid)
+    return mentions
 
 
 def _warn_if_parts_incomplete(category: str, display_names: list[str]) -> None:
@@ -1297,6 +1404,7 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
                 meta.get("output_format_category") if isinstance(meta, dict) else None
             ),
             message=_optional_str(raw.get("message")),
+            structured_content=raw.get("structured_content"),
             start_timestamp=raw.get("start_timestamp"),
             stop_timestamp=raw.get("stop_timestamp"),
         )

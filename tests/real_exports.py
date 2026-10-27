@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from viewer.categories import LAYOUT_MULTI_FILE, orphan_runs
 from viewer.parser import (
     CONTAINER_LEGACY,
     KNOWN_BLOCK_TYPES,
@@ -120,6 +121,25 @@ def unresolved_parent_graphs(export: Export) -> int:
     return bad
 
 
+def later_category_problems(export: Export) -> dict[str, int]:
+    """v1.4.0 invariants (export-categories record §6), as counts of violations."""
+    unresolved_active = sum(1 for a in export.artifacts if "active_version_missing" in a.flags)
+    failed_integrity = sum(
+        1
+        for a in export.artifacts
+        for v in a.versions
+        if v.layout == LAYOUT_MULTI_FILE and (v.unlisted_files or not all(f.ok for f in v.files))
+    )
+    known_tasks = {t.routine_id for t in export.scheduled_tasks}
+    resolved = sum(1 for r in export.task_runs if r.routine_id in known_tasks)
+    orphans = len(orphan_runs(export.scheduled_tasks, export.task_runs))
+    return {
+        "unresolved active versions": unresolved_active,
+        "multi-file versions failing integrity": failed_integrity,
+        "runs neither resolved nor preserved": len(export.task_runs) - resolved - orphans,
+    }
+
+
 def assert_invariants(export: Export) -> None:
     """The real-data invariants; failure messages are aggregate counts only."""
     unknown = unknown_known_types(export)
@@ -141,3 +161,5 @@ def assert_invariants(export: Export) -> None:
         pytest.fail("search index row count drifted from its expected formula", pytrace=False)
     expected = _expected_row_count(export)
     assert rows == expected, f"search index holds {rows} rows, expected {expected}"
+    problems = {k: v for k, v in later_category_problems(export).items() if v}
+    assert not problems, f"later-category invariants violated: {problems}"

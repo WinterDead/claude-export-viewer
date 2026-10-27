@@ -12,6 +12,7 @@ Step 4 ergonomic shape (confirmed in §12 step 4):
 
 from __future__ import annotations
 
+import dataclasses
 import io
 import logging
 import os
@@ -46,6 +47,7 @@ from viewer.export import (
 from viewer.history import all_history, record_load
 from viewer.inspect import begin_inspection, end_inspection, get_inspection
 from viewer.parser import (
+    CATEGORY_FRAMES,
     CONTAINER_LEGACY,
     KNOWN_CATEGORIES,
     LATER_CATEGORIES,
@@ -198,6 +200,35 @@ def _refuse_while_inspecting() -> None:
     have hidden the controls."""
     if get_inspection(current_app) is not None:
         abort(403, "Read-only while inspecting an export. Return to your own export first.")
+
+
+def artifact_part_opener():
+    """The byte source for the viewed export's category ZIPs (export-categories
+    record §6.1): inspect mode's in-memory parts, or the primary export's stored
+    files. Returns a callable ``part -> path | file object | None`` for
+    :func:`viewer.categories.read_member`; nothing is ever written."""
+    state = get_inspection(current_app)
+    if state is not None:
+        blobs = state.part_blobs
+
+        def from_memory(part: str):
+            data = blobs.get(part)
+            return io.BytesIO(data) if data is not None else None
+
+        return from_memory
+
+    export: Export = current_app.config["EXPORT"]
+    active_set: Path = current_app.config["ACTIVE_SET_PATH"]
+
+    def from_disk(part: str):
+        for source in export.source_paths:
+            path = Path(source)
+            if path.name == part and path.is_file():
+                return path
+        stored = active_set / part
+        return stored if stored.is_file() else None
+
+    return from_disk
 
 
 def legacy_memory_state(export: Export) -> bool:
@@ -1176,6 +1207,13 @@ def upload_post():
             shutil.rmtree(stage)
 
     invalidate_cache(pickle_path)
+    # The set was parsed from the staging directory; point its sources at the
+    # stored files, so the footer is right and artifact bytes stay readable
+    # after the stage is renamed into place (export-categories record §6.1).
+    new_export = dataclasses.replace(
+        new_export,
+        source_paths=[str(active_set / Path(p).name) for p in new_export.source_paths],
+    )
 
     db = get_db()
     index_export(db, new_export)
@@ -1384,6 +1422,7 @@ def inspect_post():
         display,
         manifest_status=manifest_status,
         manifest_categories=expected_categories,
+        part_blobs=dict(slotted.get(CATEGORY_FRAMES, [])),
     )
     for notice in notices:
         flash(notice, LOAD_NOTICE_CATEGORY)

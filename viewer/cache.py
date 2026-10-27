@@ -35,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 _PARSER_MODULE = Path(__file__).resolve().parent / "parser.py"
+# The later categories' models and loaders live beside the parser (v1.4.0); a
+# change to either module must invalidate the pickle.
+_MODEL_MODULES = (_PARSER_MODULE, Path(__file__).resolve().parent / "categories.py")
 
 
 def _sha256_file(path: Path) -> str:
@@ -46,9 +49,15 @@ def _sha256_file(path: Path) -> str:
 
 
 def parser_module_hash() -> str:
-    """SHA256 of ``viewer/parser.py``. Recomputed on every call — cheap, and
-    avoids stale-cache surprises during dev iteration."""
-    return _sha256_file(_PARSER_MODULE)
+    """SHA256 over ``viewer/parser.py`` and ``viewer/categories.py`` — the modules
+    that define the pickled model. Recomputed on every call: cheap, and avoids
+    stale-cache surprises during dev iteration."""
+    if not _MODEL_MODULES[1].is_file():  # pragma: no cover - defensive
+        return _sha256_file(_PARSER_MODULE)
+    h = hashlib.sha256()
+    for module in _MODEL_MODULES:
+        h.update(_sha256_file(module).encode("ascii"))
+    return h.hexdigest()
 
 
 def zip_hash(zip_path: Path) -> str:

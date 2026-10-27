@@ -62,8 +62,12 @@ def test_index_export_populates_expected_row_count(conn, export) -> None:
     # 4 conversations + 10 messages + 2 projects + 3 docs + 1 global memory
     # + 1 project memory (proj-A only) + 0 orphans = 21, plus one row per
     # memory file (v1.3.0, record §7 — 4 in the current-format fixture,
-    # none in the legacy one).
-    assert n == 21 + len(export.memory_files)
+    # none in the legacy one), plus one row per artifact and per scheduled
+    # task (v1.4.0, export-categories §6.6 — 3 and 2 in the current fixture,
+    # none in the legacy one). The invariant moves in lockstep with its kinds.
+    assert n == 21 + len(export.memory_files) + len(export.artifacts) + len(export.scheduled_tasks)
+    if export.artifacts:
+        assert (len(export.artifacts), len(export.scheduled_tasks)) == (3, 2)
 
 
 def test_index_export_is_idempotent(conn, export) -> None:

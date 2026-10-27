@@ -21,7 +21,7 @@ tool.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from viewer.search import index_export
@@ -54,6 +54,10 @@ class InspectState:
     # The inspected manifest's distinct categories — the A7 banner's
     # expected set (export-categories record §4); ``()`` without a manifest.
     manifest_categories: tuple[str, ...] = ()
+    # The inspected ``frames`` ZIPs' bytes, by filename: artifact files are
+    # read on demand from here (export-categories record §6.1) — memory only,
+    # so the no-trace rule holds.
+    part_blobs: dict[str, bytes] = field(default_factory=dict)
 
 
 def begin_inspection(
@@ -63,6 +67,7 @@ def begin_inspection(
     *,
     manifest_status: tuple[int, int] | None = None,
     manifest_categories: tuple[str, ...] = (),
+    part_blobs: dict[str, bytes] | None = None,
 ) -> InspectState:
     """Enter inspect mode (replacing any inspection already in progress).
 
@@ -78,6 +83,7 @@ def begin_inspection(
         search_conn=conn,
         manifest_status=manifest_status,
         manifest_categories=manifest_categories,
+        part_blobs=dict(part_blobs or {}),
     )
     app.config[_CONFIG_KEY] = state
     return state

@@ -12,6 +12,10 @@ Indexed kinds:
     memory_global   body=global_memory.content (the conversation memory)
     memory_project  body=project_memory.content (resolved + orphan)
     memory_file     title=file path, body=file content (v1.3.0, record §7)
+    artifact        title=active version's title, body=description + visible page
+                    text or page Markdown + multi-file Markdown (v1.4.0, export-
+                    categories record §6.6); entity_id=artifact id
+    scheduled_task  title=task name, body=prompt; entity_id=routine id (v1.4.0)
 
 Snippets use ``\\x02hit\\x02 … \\x02/hit\\x02`` as start/end markers. The
 substitution to ``<mark>`` happens in :func:`viewer.render.render_search_snippet`
@@ -64,6 +68,7 @@ CREATE VIRTUAL TABLE search USING fts5(
     doc_uuid UNINDEXED,
     title,
     body,
+    entity_id UNINDEXED,
     tokenize = "unicode61 remove_diacritics 1"
 );
 """
@@ -93,6 +98,8 @@ class SearchHit:
     parent_message_uuid: str = ""
     project_uuid: str = ""
     doc_uuid: str = ""
+    # Artifact id or routine id for the v1.4.0 kinds (export-categories §6.6).
+    entity_id: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +198,19 @@ def index_export(conn: sqlite3.Connection, export: Export) -> int:
                 (orphan.project_uuid, _scrub(orphan.content)),
             )
 
+        # Export-categories record §6.6: one row per artifact and per task.
+        for artifact in export.artifacts:
+            conn.execute(
+                "INSERT INTO search (kind, title, body, entity_id) VALUES ('artifact', ?, ?, ?)",
+                (_scrub(artifact.title), _scrub(artifact.search_text), artifact.id),
+            )
+        for task in export.scheduled_tasks:
+            conn.execute(
+                "INSERT INTO search (kind, title, body, entity_id) "
+                "VALUES ('scheduled_task', ?, ?, ?)",
+                (_scrub(task.name), _scrub(task.prompt), task.routine_id),
+            )
+
     actual = conn.execute("SELECT COUNT(*) FROM search").fetchone()[0]
     if actual != expected:
         raise RuntimeError(
@@ -208,7 +228,20 @@ def _expected_row_count(export: Export) -> int:
     orphans = len(export.orphan_project_memories)
     global_mem = 1 if export.global_memory is not None and export.global_memory.content else 0
     memory_files = len(export.memory_files)
-    return convs + msgs + projs + docs + proj_mems + orphans + global_mem + memory_files
+    artifacts = len(export.artifacts)
+    tasks = len(export.scheduled_tasks)
+    return (
+        convs
+        + msgs
+        + projs
+        + docs
+        + proj_mems
+        + orphans
+        + global_mem
+        + memory_files
+        + artifacts
+        + tasks
+    )
 
 
 def _extract_message_body(msg: Message) -> str:
@@ -352,7 +385,7 @@ def search(conn: sqlite3.Connection, query: str, *, limit: int = 200) -> SearchR
         SELECT kind, conversation_uuid, message_uuid, parent_message_uuid,
                project_uuid, doc_uuid, title,
                snippet(search, {_BODY_COL_IDX}, ?, ?, ?, ?) AS snippet,
-               bm25(search) AS rank
+               bm25(search) AS rank, entity_id
           FROM search
          WHERE search MATCH ?
          ORDER BY rank
@@ -393,6 +426,7 @@ def search(conn: sqlite3.Connection, query: str, *, limit: int = 200) -> SearchR
             title=r[6] or "",
             snippet=r[7] or "",
             rank=r[8],
+            entity_id=r[9] or "",
         )
         for r in rows
     ]
