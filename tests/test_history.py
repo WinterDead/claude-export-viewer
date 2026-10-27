@@ -181,7 +181,6 @@ def test_startup_with_active_zip_records_once_per_archive(
     monkeypatch.setattr(app_module, "ACTIVE_SET", tmp_path / "cache" / "active_export")
     monkeypatch.setattr(app_module, "ACTIVE_ZIP", active)
     monkeypatch.setattr(app_module, "PARSE_CACHE", tmp_path / "cache" / "parsed_export.pkl")
-    monkeypatch.setattr(app_module, "REAL_EXPORT", tmp_path / "data" / "data.zip")
     db_path = tmp_path / "viewer.sqlite"
 
     # First launch: records. Relaunch with the same archive: no new row.

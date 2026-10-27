@@ -639,6 +639,22 @@ format (manifest + four category zips replacing the single zip) and the memory s
     Release; release audit — `pip-audit` in a scratch venv, the arc-wide
     stranger-read sweep, and the R Phase 2 eight-claim table fully closed.
 
+### v1.3.1 and v1.4.0 — export categories (Session U, in progress)
+
+Design record: `docs/export-categories-design.md` (ratified 2026-10-27); brief and
+per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase lands:
+
+- **The real export leaves the tree** (record D12, phase 2). The startup load order is
+  uploaded export → built-in fixture; the `data/` development copy and its code path are
+  retired. Rationale of record: *real exports never live in the tree, gitignored or not* —
+  the stored set in `cache/active_export/` already provides everything the copy did.
+  Real-data tests read `VIEWER_REAL_EXPORT_DIR` (skip when unset), one parametrised case
+  per export found, and assert invariants rather than counts (`tests/real_exports.py`).
+  `.gitignore` keeps `data/`.
+- **A5 — display-content bodies collapse by size** (phase 2): `DISPLAY_BODY_COLLAPSE_LINES
+  = 30`, `DISPLAY_BODY_COLLAPSE_CHARS = 2000` in `viewer/render.py`; teaser copy U1 from the
+  block's own `message` line (now preserved on tool blocks) or its tool name.
+
 ### Later (unscheduled, non-blocking)
 
 - **1.3.x patch series (post-1.3.0) (reserved — recorded prominently so it isn't

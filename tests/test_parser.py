@@ -1,16 +1,18 @@
 """Happy-path tests for ``viewer.parser`` against the synthetic fixture.
 
-Plus an opportunistic integration check against the user's real ``data/data.zip``
-when present — skipped in CI.
+Plus opt-in invariant checks against real legacy exports in the directory named by
+``VIEWER_REAL_EXPORT_DIR`` — skipped when it is unset (see ``tests/real_exports.py``).
 """
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC
 from pathlib import Path
 
 import pytest
 
+from tests import real_exports
 from viewer.parser import (
     Attachment,
     Conversation,
@@ -24,7 +26,6 @@ from viewer.parser import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
-    load_export,
 )
 
 
@@ -146,39 +147,14 @@ def test_conv_4_branching_picks_leaf_most_by_time(export: Export) -> None:
     assert any(m.uuid == f4 for m in conv.messages)
 
 
-def test_real_export_loads_with_expected_counts(fixtures_dir: Path) -> None:
-    """Integration check against the user's real export, if present."""
-    real = fixtures_dir.parent.parent / "data" / "data.zip"
-    if not real.exists():
-        pytest.skip("real export not present at data/data.zip")
-
-    export = load_export(real)
-    assert len(export.conversations) == 134
-    assert len(export.projects) == 7
-
-    total_msgs = sum(len(c.messages) for c in export.conversations)
-    assert total_msgs == 1817
-
-    project_memories = sum(1 for p in export.projects if p.memory is not None)
-    assert project_memories == 3
-
-    branched = sum(1 for c in export.conversations if c.branch_points)
-    assert branched == 12
-
-    assert export.orphan_project_memories == []
-
-    # Round-trip sanity: every message uuid appears exactly once in messages.
-    seen_msg_uuids: set[str] = set()
-    for conv in export.conversations:
-        for msg in conv.messages:
-            assert msg.uuid not in seen_msg_uuids
-            seen_msg_uuids.add(msg.uuid)
-        # canonical_path is a contiguous parent-child chain.
-        for parent_uuid, child_uuid in zip(
-            conv.canonical_path, conv.canonical_path[1:], strict=False
-        ):
-            child_msg = next(m for m in conv.messages if m.uuid == child_uuid)
-            assert child_msg.parent_uuid == parent_uuid
+@pytest.mark.parametrize("real_export", real_exports.params("legacy"))
+def test_real_legacy_exports_hold_the_invariants(real_export: Path | None, caplog) -> None:
+    """Opt-in check against each legacy ZIP under ``VIEWER_REAL_EXPORT_DIR`` (skipped
+    when unset). Invariants, not counts; failures print aggregate counts only, and
+    parser warnings (which name identifiers) are silenced rather than captured."""
+    caplog.set_level(logging.CRITICAL, logger="viewer")
+    export = real_exports.load_quietly(real_export)
+    real_exports.assert_invariants(export)
 
 
 def test_conversation_and_message_repr_omit_body_text(export: Export) -> None:

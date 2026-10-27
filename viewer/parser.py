@@ -50,6 +50,13 @@ ALL_CATEGORIES = (
     CATEGORY_LIGHT_METADATA,
 )
 
+# Content-block types the parser types; anything else is preserved as an
+# UnknownBlock. The real-data invariant tests assert no block of these types
+# ever reaches UnknownBlock.
+KNOWN_BLOCK_TYPES = frozenset(
+    {"text", "thinking", "tool_use", "tool_result", "injected_prompt_block"}
+)
+
 _LEGACY_TRIO = frozenset({"users.json", "memories.json", "conversations.json"})
 _PROJECT_MEMBER_RE = re.compile(r"projects/[^/]+\.json$")
 _MEMORY_MEMBER_RE = re.compile(r"memories/[^/]+\.json$")

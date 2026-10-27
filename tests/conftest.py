@@ -93,7 +93,6 @@ def app_factory(tmp_path: Path, fixtures_dir: Path, monkeypatch):
         monkeypatch.setattr(app_module, "ACTIVE_SET", cache_dir / "active_export")
         monkeypatch.setattr(app_module, "ACTIVE_ZIP", cache_dir / "active_export.zip")
         monkeypatch.setattr(app_module, "PARSE_CACHE", cache_dir / "parsed_export.pkl")
-        monkeypatch.setattr(app_module, "REAL_EXPORT", tmp_path / "data" / "data.zip")
 
         flask_app = create_app(
             fixtures_dir / initial_fixture,

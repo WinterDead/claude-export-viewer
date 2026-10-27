@@ -68,7 +68,7 @@ At the end of every session:
 
 ```
 claude-export-viewer/
-├── app.py                 # Flask app factory; startup load order: uploaded export → dev copy → fixture
+├── app.py                 # Flask app factory; startup load order: uploaded export → fixture
 ├── viewer/                # Application package: parser, parse cache, tagging, upload history, FTS5 search, routes, rendering, help content
 ├── templates/             # Jinja2 templates (server-side rendering)
 ├── static/                # CSS, page JS, vendored highlight.js
@@ -83,7 +83,6 @@ claude-export-viewer/
 ├── .claude/               # dev-server launch config for tooling
 ├── .gitattributes         # line-ending pins for the launchers; vendored assets exempt from EOL conversion
 ├── .gitignore             # excludes data/, cache/, .venv/, and derived state
-├── data/                  # gitignored — optional dev-convenience export copy (data.zip)
 └── cache/                 # gitignored — uploaded export, parse cache, tag/history database
 ```
 

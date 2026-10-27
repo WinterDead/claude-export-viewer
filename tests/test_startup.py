@@ -1,10 +1,11 @@
 """Graceful-startup tests (v1.1.5 Session I, Task C).
 
-The stored upload (``cache/active_export.zip``) and the dev copy
-(``data/data.zip``) fall through the startup load order on a parse failure:
-a ``WARNING`` names the skipped source, the file is left in place, and — for
-the stored upload only — every page shows a persistent banner until a
-successful upload replaces the file. A broken fixture still raises: it is
+The stored upload (``cache/active_export/`` or the pre-set
+``cache/active_export.zip``) falls through the startup load order on a parse
+failure: a ``WARNING`` names the skipped source, the file is left in place,
+and every page shows a persistent banner until a successful upload replaces
+the file. Since v1.3.1 the order is uploaded export → built-in fixture; the
+``data/`` development copy is retired. A broken fixture still raises: it is
 committed code, so its failure is a broken build, not a user condition.
 """
 
@@ -40,28 +41,23 @@ def startup_env(
 ) -> SimpleNamespace:
     """Point app.py's module-level source paths into ``tmp_path``.
 
-    Tests populate the active/dev files they need, then call
+    Tests populate the stored files they need, then call
     ``create_app(None)`` to exercise the real startup load order without
-    touching the repo's ``cache/`` or ``data/`` directories. The synthetic
+    touching the repo's ``cache/`` directory. The synthetic
     fixture path is deliberately left real — the committed fixture is the
     last-ditch fallback under test.
     """
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
     active_set = cache_dir / "active_export"
     active = cache_dir / "active_export.zip"
-    dev_copy = data_dir / "data.zip"
     monkeypatch.setattr(app_module, "CACHE_DIR", cache_dir)
     monkeypatch.setattr(app_module, "ACTIVE_SET", active_set)
     monkeypatch.setattr(app_module, "ACTIVE_ZIP", active)
     monkeypatch.setattr(app_module, "PARSE_CACHE", cache_dir / "parsed_export.pkl")
-    monkeypatch.setattr(app_module, "REAL_EXPORT", dev_copy)
     return SimpleNamespace(
         active_set=active_set,
         active=active,
-        dev_copy=dev_copy,
         db_path=tmp_path / "viewer.sqlite",
         corrupt_bytes=(fixtures_dir / "corrupt_export.zip").read_bytes(),
         good_bytes=export_path.read_bytes(),
@@ -185,21 +181,37 @@ def test_healthy_stored_export_shows_no_banner(startup_env) -> None:
     assert _banner_text(body) is None
 
 
-def test_corrupt_dev_copy_falls_back_silently(startup_env, caplog) -> None:
-    """No stored upload, corrupt dev copy: fixture loads, WARNING logged,
-    but no banner — the dev copy is a developer convenience that public
-    users never have."""
-    startup_env.dev_copy.write_bytes(startup_env.corrupt_bytes)
-
+def test_fixture_loads_when_no_set_is_stored(startup_env, caplog) -> None:
+    """v1.3.1: the load order is uploaded export → built-in fixture. With
+    nothing stored, the fixture loads quietly — no banner, no warning, no
+    history row."""
     with caplog.at_level(logging.WARNING, logger="app"):
         flask_app = create_app(None, db_path=startup_env.db_path)
 
     loaded = [Path(p).name for p in flask_app.config["EXPORT"].source_paths]
     assert loaded == [SYNTHETIC_EXPORT]
     assert flask_app.config["STORED_EXPORT_FAILED"] is False
-
-    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert any("data.zip" in r.getMessage() and "skipped" in r.getMessage() for r in warnings)
-
+    assert not [r for r in caplog.records if r.levelno == logging.WARNING]
     body = flask_app.test_client().get("/").get_data(as_text=True)
     assert _banner_text(body) is None
+
+
+def test_data_dev_copy_step_is_retired() -> None:
+    """The ``data/`` development copy no longer exists in the load order —
+    real exports never live in the project tree (record D12)."""
+    assert not hasattr(app_module, "REAL_EXPORT")
+    source = Path(app_module.__file__).read_text(encoding="utf-8")
+    assert '"data"' not in source
+
+
+def test_importing_app_builds_no_app() -> None:
+    """Importing the module must not run the startup load order: the suite
+    imports it, and an import must never parse or index the user's stored
+    export under ``cache/``. ``flask --app app`` finds the factory instead —
+    Flask's discovery calls ``create_app`` when it takes no required
+    arguments."""
+    import inspect
+
+    assert not hasattr(app_module, "app")
+    params = inspect.signature(app_module.create_app).parameters.values()
+    assert all(p.default is not inspect.Parameter.empty for p in params)

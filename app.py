@@ -10,15 +10,18 @@ Startup load order (plan §12 step 7; sets since v1.3.0):
    files (record §5; a legacy ZIP upload is simply a set of one).
 2. ``cache/active_export.zip`` — a stored upload from a pre-set version,
    picked up by tolerance.
-3. ``data/data.zip`` — dev convenience copy committed by hand.
-4. ``tests/fixtures/synthetic_export.zip`` — last-ditch fallback so the
+3. ``tests/fixtures/synthetic_export.zip`` — last-ditch fallback so the
    templates always have *something* to render.
 
-An unparseable stored upload or dev copy falls through to the next source
-with a ``WARNING`` (v1.1.5 Session I) — the file is left in place and, for
-the stored upload, every page shows a banner until a successful upload
-replaces it. A broken fixture still raises: it is committed code, so a
-failure there is a broken build, not a user condition.
+The ``data/`` development copy that once sat between steps 2 and 3 was
+retired in v1.3.1: real exports never live in the project tree, and the
+stored set already provides everything the copy did.
+
+An unparseable stored upload falls through to the next source with a
+``WARNING`` (v1.1.5 Session I) — the file is left in place and every page
+shows a banner until a successful upload replaces it. A broken fixture still
+raises: it is committed code, so a failure there is a broken build, not a
+user condition.
 
 When the active zip is present and its hash matches the pickle cache key,
 ``viewer.cache.load_or_build`` short-circuits the parse step. ``create_app``
@@ -74,7 +77,6 @@ CACHE_DIR = PROJECT_ROOT / "cache"
 ACTIVE_SET = CACHE_DIR / "active_export"
 ACTIVE_ZIP = CACHE_DIR / "active_export.zip"
 PARSE_CACHE = CACHE_DIR / "parsed_export.pkl"
-REAL_EXPORT = PROJECT_ROOT / "data" / "data.zip"
 SYNTHETIC_FIXTURE = PROJECT_ROOT / "tests" / "fixtures" / "synthetic_export.zip"
 DB_PATH = CACHE_DIR / "viewer.sqlite"
 
@@ -91,8 +93,8 @@ def _load_default_source() -> tuple[Export, tuple[str, str] | None, bool, tuple[
     """Apply the documented startup-load order, falling through gracefully.
 
     Returns ``(export, startup_record, stored_export_failed,
-    manifest_status)``. The stored set/upload and the dev copy are files a
-    user (or developer) put there, so a parse failure logs a ``WARNING``
+    manifest_status)``. The stored set/upload is files the user put there,
+    so a parse failure logs a ``WARNING``
     naming the skipped source and falls through to the next source, leaving
     the files exactly where they are — the parse-before-replace upload flow
     is the recovery path. The fixture is committed code: a broken fixture is
@@ -133,12 +135,6 @@ def _load_default_source() -> tuple[Export, tuple[str, str] | None, bool, tuple[
                 e,
             )
             stored_export_failed = True
-    if REAL_EXPORT.is_file():
-        try:
-            export = load_export(REAL_EXPORT)
-            return export, (REAL_EXPORT.name, zip_hash(REAL_EXPORT)), stored_export_failed, None
-        except ExportFormatError as e:
-            logger.warning("dev copy %s could not be parsed and was skipped: %s", REAL_EXPORT, e)
     return load_export(SYNTHETIC_FIXTURE), None, stored_export_failed, None
 
 
@@ -166,9 +162,8 @@ def create_app(
     )
 
     # ``(filename, fingerprint)`` when this startup load should be
-    # considered for an upload-history row — real exports only (the active
-    # set/zip or the dev ``data/data.zip``). Fixture and test loads record
-    # nothing.
+    # considered for an upload-history row — stored uploads only (the active
+    # set or the pre-set zip). Fixture and test loads record nothing.
     startup_record: tuple[str, str] | None = None
     # True when the stored upload was skipped for a parse failure — drives
     # the persistent banner until a successful upload replaces the file.
@@ -186,18 +181,15 @@ def create_app(
         # Explicit source (tests, dev calls): parse failures raise — the
         # caller named the file, so degrading silently would mask the error.
         src = Path(export_source)
-        # Use the parse cache only for the active export — fixtures and
-        # the dev ``data/data.zip`` get parsed fresh every time, so test
-        # runs and developer iteration aren't affected by stale pickles.
+        # Use the parse cache only for the active export — fixtures get
+        # parsed fresh every time, so test runs aren't affected by stale
+        # pickles.
         if src.resolve() == ACTIVE_ZIP.resolve():
             # Hash once: the digest keys the pickle cache AND identifies the
             # archive in the upload-history log (A3 — no second hashing).
             sha = zip_hash(src)
             export = load_or_build(src, PARSE_CACHE, fingerprint=sha)
             startup_record = (src.name, sha)
-        elif src.resolve() == REAL_EXPORT.resolve():
-            export = load_export(src)
-            startup_record = (src.name, zip_hash(src))
         else:
             export = load_export(src)
 
@@ -314,5 +306,8 @@ def create_app(
     return app
 
 
-# `flask --app app run` discovers this module-level variable.
-app = create_app()
+# No module-level app instance: `flask --app app run` finds the `create_app`
+# factory by name and calls it with no arguments (Flask's documented app
+# discovery), so the default startup load order runs only when the server
+# starts — never as a side effect of importing this module (tests import it;
+# an import must not parse or index the user's stored export under cache/).

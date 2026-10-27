@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+from tests import real_exports
 from tests.fixtures.build_fixtures import MANIFEST_FILENAME, SIGNATURE_SENTINEL
 from viewer.cache import parser_module_hash, write_cache
 from viewer.parser import (
@@ -380,23 +381,11 @@ def test_legacy_parse_carries_the_same_slots_empty(fixtures_dir: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_real_current_export_loads_with_expected_counts(fixtures_dir: Path) -> None:
-    """Current-format twin of test_parser's legacy real-data check. Expected
-    values are the Session R Phase 1 confirm-table aggregates."""
-    real = fixtures_dir.parent.parent / "data" / "export-2026-08"
-    if not real.is_dir() or not any(real.glob("*.zip")):
-        pytest.skip("real current-format export not present at data/export-2026-08/")
-
-    export = load_export(real)
-    assert export.user is not None
-    assert export.categories == ALL_CATEGORIES
-    assert len(export.conversations) == 259
-    assert sum(len(c.messages) for c in export.conversations) == 2970
-    assert len(export.projects) == 7
-    assert sum(len(p.docs) for p in export.projects) == 21
-    resolved = sum(1 for p in export.projects if p.memory is not None)
-    assert resolved + len(export.orphan_project_memories) == 3
-    assert len(export.memory_files) == 18
-    assert len(export.login_events) == 12
-    assert export.global_memory is not None
-    assert len(export.global_memory.content) == 10015
+@pytest.mark.parametrize("real_set", real_exports.params("set"))
+def test_real_current_sets_hold_the_invariants(real_set: Path | None, caplog) -> None:
+    """Current-format twin of test_parser's real-data check: each set directory under
+    ``VIEWER_REAL_EXPORT_DIR`` (skipped when unset) parses and holds the invariants.
+    Failures print aggregate counts only; parser warnings are silenced."""
+    caplog.set_level(logging.CRITICAL, logger="viewer")
+    export = real_exports.load_quietly(real_set)
+    real_exports.assert_invariants(export)
