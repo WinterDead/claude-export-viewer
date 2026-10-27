@@ -27,7 +27,7 @@ ever render resolved data.
 from __future__ import annotations
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from viewer.tagging import NO_PROJECT_SENTINEL, all_tags
@@ -49,6 +49,13 @@ class TagState:
     live: dict[str, str]
     orphan_conv: dict[str, str]
     orphan_project: dict[str, str]
+    # Amendment A11: when the loaded set lacks a category, that dimension's
+    # orphan check is paused. Rows it would have flagged are held here —
+    # neither counted nor purgeable.
+    held_conv: dict[str, str] = field(default_factory=dict)
+    held_project: dict[str, str] = field(default_factory=dict)
+    conv_checks_paused: bool = False
+    project_checks_paused: bool = False
 
     @property
     def orphan_count(self) -> int:
@@ -69,20 +76,55 @@ def compute_tag_state(conn: sqlite3.Connection, export: Export) -> TagState:
     raw = all_tags(conn)
     conv_uuids = {c.uuid for c in export.conversations}
     project_uuids = {p.uuid for p in export.projects}
+    # A11: a set without conversations (or projects) can't say a tag's
+    # conversation (or project) is gone, so that check is paused.
+    conv_paused = "conversations" not in export.categories
+    project_paused = "projects" not in export.categories
 
     live: dict[str, str] = {}
     orphan_conv: dict[str, str] = {}
     orphan_project: dict[str, str] = {}
+    held_conv: dict[str, str] = {}
+    held_project: dict[str, str] = {}
 
     for cuid, puid in raw.items():
         if cuid not in conv_uuids:
-            orphan_conv[cuid] = puid
+            (held_conv if conv_paused else orphan_conv)[cuid] = puid
         elif puid != NO_PROJECT_SENTINEL and puid not in project_uuids:
-            orphan_project[cuid] = puid
+            (held_project if project_paused else orphan_project)[cuid] = puid
         else:
             live[cuid] = puid
 
-    return TagState(live=live, orphan_conv=orphan_conv, orphan_project=orphan_project)
+    return TagState(
+        live=live,
+        orphan_conv=orphan_conv,
+        orphan_project=orphan_project,
+        held_conv=held_conv,
+        held_project=held_project,
+        conv_checks_paused=conv_paused,
+        project_checks_paused=project_paused,
+    )
+
+
+# Copy E2 (v1.4.0 review): what the orphan surfaces say for a paused check.
+PAUSED_CONV_NOTICE = (
+    "Orphan checks for conversations are paused because this export doesn't include a "
+    "conversations file. Your tags are kept as they are."
+)
+PAUSED_PROJECT_NOTICE = (
+    "Orphan checks for projects are paused because this export doesn't include a "
+    "projects file. Your tags are kept as they are."
+)
+
+
+def paused_notices(state: TagState) -> list[str]:
+    """E2 lines for each paused dimension that is actually holding tag rows."""
+    notices = []
+    if state.conv_checks_paused and state.held_conv:
+        notices.append(PAUSED_CONV_NOTICE)
+    if state.project_checks_paused and state.held_project:
+        notices.append(PAUSED_PROJECT_NOTICE)
+    return notices
 
 
 def purge_orphan_tags(conn: sqlite3.Connection, state: TagState) -> int:

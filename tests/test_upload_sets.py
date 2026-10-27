@@ -164,8 +164,8 @@ def test_full_set_upload_records_summary_row_with_fingerprint(
     source, filename, fingerprint = rows[0]
     assert source == "upload"
     assert filename == (
-        "8 files: conversations, projects, memories, light_metadata, frames, artifact_data, "
-        "claude_code_cloud, manifest"
+        "8 files: conversations, projects, memories, account, published artifacts, "
+        "artifact data, Claude Code, manifest"
     )
     active_set: Path = flask_app.config["ACTIVE_SET_PATH"]
     assert fingerprint == set_fingerprint(sorted(active_set.iterdir()))
@@ -528,8 +528,8 @@ def test_startup_records_set_summary_after_external_change(
     source, filename, fingerprint = rows[1]
     assert source == "startup"
     assert filename == (
-        "7 files: conversations, memories, light_metadata, frames, artifact_data, "
-        "claude_code_cloud, manifest"
+        "7 files: conversations, memories, account, published artifacts, artifact data, "
+        "Claude Code, manifest"
     )
     assert fingerprint == set_fingerprint(sorted(active_set.iterdir()))
     assert "projects" not in relaunched.config["EXPORT"].categories
@@ -601,7 +601,7 @@ def test_summarise_set_shapes() -> None:
 
 def test_summarise_set_part_multiplicity() -> None:
     """Copy C3 (record §4): a category supplied as N parts appears once with
-    a multiplier, counted per file in the total."""
+    a multiplier, counted per file in the total — by its E4 display label."""
     assert (
         summarise_set(
             {
@@ -611,5 +611,5 @@ def test_summarise_set_part_multiplicity() -> None:
                 "light_metadata": ["light_metadata-000.zip"],
             }
         )
-        == "5 files: conversations ×2, projects, memories, light_metadata"
+        == "5 files: conversations ×2, projects, memories, account"
     )

@@ -11,6 +11,7 @@ import re
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit
 
 import bleach
 import markdown as _markdown
@@ -104,6 +105,49 @@ _ALLOWED_ATTRS: dict[str, list[str] | Callable[[str, str, str], bool]] = {
 # bleach's default protocol set is ["http", "https", "mailto"]; ``javascript:``
 # and ``data:`` URLs are excluded, so a markdown link with a javascript: href
 # is rendered with the href dropped (the visible link text remains).
+
+
+# Copy E4 (v1.4.0 review): category display labels; an unknown category keeps
+# its raw name. Raw keys never reach user-facing copy.
+CATEGORY_LABELS = {
+    "conversations": "conversations",
+    "projects": "projects",
+    "memories": "memories",
+    "light_metadata": "account",
+    "frames": "published artifacts",
+    "artifact_data": "artifact data",
+    "claude_code_cloud": "Claude Code",
+}
+
+
+def category_label(category: str) -> str:
+    return CATEGORY_LABELS.get(category, category)
+
+
+_URL_STRIPPED_RE = re.compile(r"[\t\n\r]")
+
+
+def web_url(value: object) -> str | None:
+    """An export-sourced URL as a link target, or ``None`` when it must render
+    as plain text (v1.4.0 review, F2; amendment A9).
+
+    Browsers drop tabs and newlines anywhere in a URL and trim leading and
+    trailing spaces and control characters before reading the scheme, so this
+    does the same first — ``java\tscript:`` and ``  javascript:`` are judged
+    as the browser would see them. Only ``http`` and ``https`` with a host are
+    links; ``javascript:``, ``data:``, ``vbscript:``, protocol-relative
+    ``//host``, and anything unparseable are not.
+    """
+    if not isinstance(value, str):
+        return None
+    cleaned = _URL_STRIPPED_RE.sub("", value).strip("".join(chr(c) for c in range(0x21)))
+    try:
+        parts = urlsplit(cleaned)
+    except ValueError:
+        return None
+    if parts.scheme.lower() not in ("http", "https") or not parts.netloc:
+        return None
+    return cleaned
 
 
 def markdown_to_html(text: str | None) -> Markup:

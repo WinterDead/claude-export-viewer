@@ -890,6 +890,9 @@ def _current_conversations() -> list[dict[str, Any]]:
         },
     ]
     final_text["citations_grouping_mode"] = "combine"
+    # A remote Markdown image (v1.4.0 review, F1): it survives sanitising, and the
+    # app's Content Security Policy keeps the browser from fetching it.
+    final_text["text"] += f"\n\n![Synthetic remote image]({REMOTE_IMAGE_URL})"
 
     pair2 = "toolu_synthetic_follow_1"
     pair3 = "toolu_synthetic_mcp_1"
@@ -1026,6 +1029,7 @@ def _docs_update_use(tool_id: str) -> dict[str, Any]:
     return block
 
 
+REMOTE_IMAGE_URL = "https://images.example.invalid/pixel.png"
 SKILL_FILE_LINES = 42
 SKILL_FILE_MESSAGE = "Read the synthetic skill file"
 

@@ -24,7 +24,7 @@
     <form method="post" action="{{ url_for('viewer.legacy_memory_set') }}" class="legacy-memory-form">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label class="legacy-memory-label">
-        <input type="checkbox" name="hide_legacy_memory" value="1"{% if legacy_memory_hidden %} checked{% endif %} onchange="this.form.submit()">
+        <input type="checkbox" name="hide_legacy_memory" value="1"{% if legacy_memory_hidden %} checked{% endif %} data-autosubmit>
         Hide legacy memory
       </label>
       <input type="hidden" name="hide_legacy_memory" value="0">

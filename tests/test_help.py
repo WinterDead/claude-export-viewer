@@ -355,3 +355,17 @@ def test_help_no_stale_single_zip_claims() -> None:
     assert "choose your export ZIP" not in src
     assert "capped at 200 MB, which comfortably covers" not in src
     assert "`active_export.zip`** — the currently loaded export" not in src
+
+
+def test_help_carries_review_copy() -> None:
+    """E1 and E3 (Session U review, F1 and F4), verbatim."""
+    src = _help_source()
+    assert (
+        "The viewer never contacts the internet, so an image in a conversation or document "
+        "that points to a web address isn't loaded. It shows as a broken image or its "
+        "description instead."
+    ) in src
+    assert (
+        "Fonts bundled with an artifact aren't loaded either, so its text uses your "
+        "system's fonts."
+    ) in src

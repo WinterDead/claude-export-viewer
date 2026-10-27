@@ -72,6 +72,9 @@
           <div class="markdown-body"><pre><code class="language-html">{{ preview.source }}</code></pre></div>
         </section>
       {% endif %}
+    {% elif version.layout == LAYOUT_MULTI_FILE %}
+      {# Q5 (copy E7): files, but no entry page to preview. #}
+      <p class="empty">This version has no page to preview. Its files are listed below.</p>
     {% else %}
       <p class="empty">This version has no files in the export.</p>
     {% endif %}
@@ -89,6 +92,15 @@
               <td>{{ f.mime_type }}</td>
               <td>{% if f.size_bytes is not none %}{{ "{:,}".format(f.size_bytes) }} bytes{% else %}—{% endif %}</td>
               <td>{% if not f.present %}Missing from the export{% elif not f.ok %}Doesn't match the export's record{% else %}OK{% endif %}</td>
+            </tr>
+          {% endfor %}
+          {% for path in version.unlisted_files %}
+            {# Q4 (copy E6): present but unlisted — shown, never served. #}
+            <tr>
+              <td><code>{{ path }}</code></td>
+              <td>—</td>
+              <td>—</td>
+              <td>Not in the export's file list (not served)</td>
             </tr>
           {% endfor %}
         </tbody>

@@ -27,7 +27,7 @@
     {# Pre-collapsed: home is a dashboard, not the memory deep-read surface.
        The full /memory view is one click away in the nav. #}
     {{ memory_block(global_memory_block) }}
-  {% else %}
+  {% elif not legacy_memory_hidden %}
     <h2>Global memory</h2>
     <p class="empty">No global memory recorded.</p>
   {% endif %}

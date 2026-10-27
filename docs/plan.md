@@ -639,13 +639,18 @@ format (manifest + four category zips replacing the single zip) and the memory s
     Release; release audit — `pip-audit` in a scratch venv, the arc-wide
     stranger-read sweep, and the R Phase 2 eight-claim table fully closed.
 
-### v1.3.1 and v1.4.0 — export categories (Session U; shipped on `session-u`, tags at the operator's review)
+### v1.4.0 — export categories (Session U; v1.3.1 folded in at review)
 
-Design record: `docs/export-categories-design.md` (ratified 2026-10-27); brief and
-per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`); release notes
-`docs/briefs/v1.3.1-release-notes.md` and `docs/briefs/v1.4.0-release-notes.md` for the
-operator's GitHub Releases. Both versions are bumped on the branch (`v1.3.1:` and `v1.4.0:`
-commits); `main` and the tags follow the phase 8 review. Locked decisions:
+Design record: `docs/export-categories-design.md` (ratified 2026-10-27, amended A9–A11 at
+the review); brief, per-phase reports, and the operator review
+(`docs/briefs/v1.4.0-session-u-review.md`) in `docs/briefs/`; release notes
+`docs/briefs/v1.4.0-release-notes.md` for the operator's GitHub Release.
+
+**v1.3.1 was folded into v1.4.0 at the review (2026-10-27).** Its bump commit (`v1.3.1:`)
+stays in history as a labelled waypoint, but no `v1.3.1` tag exists: the review's fixes
+(phase 8a) change code in the 1.3.1 range, and nobody runs 1.3.1, so nothing is lost. Its
+release notes were merged into v1.4.0's. Locked decisions (the "v1.3.1" entries below
+shipped as part of v1.4.0):
 
 - **The real export leaves the tree** (record D12, phase 2). The startup load order is
   uploaded export → built-in fixture; the `data/` development copy and its code path are
@@ -661,7 +666,7 @@ commits); `main` and the tags follow the phase 8 review. Locked decisions:
   --app app run` discovers the `create_app` factory, so test imports never parse or index
   the stored export under `cache/`.
 - **v1.3.1 — current exports load again** (phase 3; bump commit `v1.3.1:`; release notes
-  `docs/briefs/v1.3.1-release-notes.md`). Locked:
+  `docs/briefs/v1.3.1-release-notes.md`, since merged into v1.4.0's and deleted). Locked:
   - Detection: `frames`, `artifact_data`, `claude_code_cloud` signatures (record §3);
     `KNOWN_CATEGORIES` = the four core plus the three later ones. A6: unrecognised files
     are skipped with D1 on Upload and Inspect (never stored); a later-category file that
@@ -712,6 +717,69 @@ commits); `main` and the tags follow the phase 8 review. Locked decisions:
   `docs/proposals/` (bare-URL autolinking, embedded-HTML display policy, the export/print
   options pass, portable tag state); the operator hand-test brief
   `docs/briefs/v1.4.0-session-u-operator-hand-test.md`.
+- **Review fixes** (phase 8a, the operator review). Locked:
+  - **A9** — every response the app serves carries `APP_CSP` (`app.py`): only this
+    viewer's origin for any fetch directive, no inline script or `eval`, no inline styles,
+    `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`, `frame-ancestors 'self'`;
+    the artifact-file routes keep their stricter policy. The five inline event handlers
+    moved to `static/page_controls.js` (`data-autosubmit`, `data-stop-propagation`).
+    Remote Markdown images survive sanitising (no allowlist change) and the browser refuses
+    them.
+  - **F2** — `viewer.render.web_url` decides every export-sourced `href` (`rich_link`,
+    citations, and the manifest page's https check): `http`/`https` with a host link;
+    anything else renders as text.
+  - **A11** — a set without conversations (or projects) pauses that dimension's orphan
+    check: its rows are held, never counted or purged, and the banner and `/orphans` say
+    so (E2).
+  - **A10** — no artifact file carries a cross-origin header; bundled fonts don't load in
+    the preview (E3).
+  - **E4** — category display labels replace raw names in user-facing copy (D2, D3, set
+    summaries, the manifest page).
+  - Q2 — Home follows the Memory page's legacy rules; Q4 — unlisted files appear in the
+    Files table (E6), never served; Q5 — a multi-file version with no entry page says E7.
+
+### 1.4.x — non-blocking findings from the Session U codebase review
+
+Recorded at the review (2026-10-27) with their severity; nothing here was fixed in
+Session U. Source: `docs/briefs/v1.4.0-session-u-codebase-review.md`.
+
+- **Medium — upload-swap rollback.** A failed rename can strand the previous set in
+  `active_export.old`; an `index_export` failure after the disk swap leaves disk and memory
+  disagreeing; the stage directory name is fixed. Restore on failure; index before swapping.
+- **High — core parser type assumptions (F1 of the review).** Bring the legacy/current
+  core loaders to `categories.py`'s guard-and-flag style; convert stray exceptions to
+  `ExportFormatError` at the loader boundary.
+- **High — all-or-nothing category recognition (F2 of the review).** Recognise a category
+  by its defining members and keep extras with a WARNING.
+- **Medium — startup falls through only on `ExportFormatError`;** a cache-write failure
+  should be a warning.
+- **Medium — Upload and Inspect duplicate the submission pipeline** (one classify-and-slot
+  function behind an opener).
+- **Medium — `artifact_views.py` depends on `routes.py` internals;** register explicitly.
+- **Medium — `bleach` is deprecated upstream;** plan a move (e.g. `nh3`) behind the same
+  allowlist tests.
+- **Medium — memories failures abort the whole set** (more than one file, disagreeing
+  parts); degrade like the later categories.
+- **Medium — adding a category touches many places;** a per-category registry, and
+  `MAX_REQUEST_BYTES` derived from `KNOWN_CATEGORIES` (still sized for five files).
+- **Medium — test gaps:** type-drift parser fixtures; upload-swap failure paths.
+- **Low:** the timestamp parsers disagree (epoch vs `None`); comment and docstring drift
+  (`routes.py` header, `cache.py` key docstring, `search.py` "transactional"); the launcher
+  install probe ignores dependencies added later; Inspect's multipart spooling disclosure;
+  `_safe_redirect` should reject `/\host`; the pickle is unpickled before its key is
+  compared; legacy multi-batch merge drops `memory_files`/`login_events` and logs
+  duplicates at DEBUG; a tautological real-data invariant and a redundant row-count check
+  in `tests/real_exports.py`; no friendly 413 handler; dead code
+  (`load_export_from_bytes`, unused `TagState` properties, a duplicated part-suffix regex,
+  an unreachable cache branch, the `ALL_CATEGORIES`/`CORE_CATEGORIES` alias); artifact
+  `flags` computed but unrendered.
+- **Low — copy follow-ups from the stranger-read sweep:** saved-data summaries' unlabelled
+  dates; raw cron and status values; identical version titles in the picker; empty states
+  for an Artifacts page with nothing and an empty Run history; a duplicate "Open in
+  Artifacts" on a call and its result; Help's subsection triangles outside the card edge;
+  screenshot timestamps showing the capture machine's time zone.
+- (Q3, the footer's staging path, was already fixed in phase 4 — G4.3 — so it is not
+  queued.)
 
 ### Later (unscheduled, non-blocking)
 

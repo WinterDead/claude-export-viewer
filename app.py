@@ -64,6 +64,7 @@ from viewer.render import (
     sender_label,
     slugify,
     summary_preview,
+    web_url,
 )
 from viewer.routes import (
     MAX_REQUEST_BYTES,
@@ -75,7 +76,7 @@ from viewer.routes import (
     summarise_set_dir,
 )
 from viewer.search import index_export
-from viewer.state import compute_tag_state
+from viewer.state import compute_tag_state, paused_notices
 from viewer.tagging import NO_PROJECT_LABEL, NO_PROJECT_SENTINEL, init_db
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -91,6 +92,28 @@ SYNTHETIC_FIXTURE = PROJECT_ROOT / "tests" / "fixtures" / "synthetic_export.zip"
 DB_PATH = CACHE_DIR / "viewer.sqlite"
 
 logger = logging.getLogger(__name__)
+
+# Amendment A9 (docs/export-categories-design.md §1): the app's own pages reach
+# no network. Only this viewer's origin is permitted for any fetch directive;
+# no inline script and no eval, so a javascript: URL can't run; no inline
+# styles either (the templates use none). ``frame-src 'self'`` is the artifact
+# preview; ``connect-src 'self'`` is Copy conversation's fetch of the export.
+APP_CSP = (
+    "default-src 'none'; "
+    "script-src 'self'; "
+    "style-src 'self'; "
+    "img-src 'self' data:; "
+    "font-src 'self'; "
+    "connect-src 'self'; "
+    "frame-src 'self'; "
+    "media-src 'none'; "
+    "worker-src 'none'; "
+    "manifest-src 'none'; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "frame-ancestors 'self'"
+)
 
 
 def _active_set_files() -> list[Path]:
@@ -250,6 +273,8 @@ def create_app(
     app.jinja_env.filters["sender_label"] = sender_label
     app.jinja_env.filters["pretty_json"] = pretty_json
     app.jinja_env.filters["display_body_fold"] = display_body_fold
+    # F2 (v1.4.0 review): export-sourced URLs are links only when http(s).
+    app.jinja_env.filters["web_url"] = web_url
 
     # No-Project sentinel (v1.1 Session B): templates render the option value
     # and label from the same constants the tagging layer defines, so the
@@ -278,10 +303,12 @@ def create_app(
         try:
             state = compute_tag_state(get_db(), primary_export)
             orphan_count = state.orphan_count
+            orphan_paused = paused_notices(state)
         except Exception:  # noqa: BLE001
             # Banner is informational; never block a page render on its
             # computation. Defensive against e.g. DB connection oddities.
             orphan_count = 0
+            orphan_paused = []
         # Degraded-view banner (record §4, copy C1; A7 and D3 since v1.3.1):
         # with a manifest, the expected categories are its distinct
         # categories and every missing one gets a line — unknown names
@@ -306,6 +333,8 @@ def create_app(
             "g_user_name": live_export.user.full_name if live_export.user is not None else "",
             "g_source_paths": list(live_export.source_paths),
             "g_orphan_count": orphan_count,
+            # E2 (A11): paused orphan checks, said instead of counting.
+            "g_orphan_paused": orphan_paused,
             # Re-read per request: a successful upload clears the flag
             # without a restart (viewer.routes.upload_post).
             "g_stored_export_failed": app.config.get("STORED_EXPORT_FAILED", False),
@@ -330,6 +359,14 @@ def create_app(
                 else "system"
             ),
         }
+
+    @app.after_request
+    def _content_security_policy(response):
+        # Amendment A9 (v1.4.0 review, F1): every response the app serves
+        # permits no remote origin and no inline script. The artifact-file
+        # routes set their own, stricter policy, which is left in place.
+        response.headers.setdefault("Content-Security-Policy", APP_CSP)
+        return response
 
     app.register_blueprint(bp)
     return app

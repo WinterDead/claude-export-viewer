@@ -31,6 +31,9 @@
   {% endif %}
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='memory.js') }}" defer></script>
+  {# Auto-submit and click wiring that used to be inline attributes: the
+     app's CSP forbids inline script (v1.4.0 review, F1). #}
+  <script src="{{ url_for('static', filename='page_controls.js') }}" defer></script>
   {# Deferred scripts execute in document order — the highlight.js bundle
      must precede the powershell language module (registers into the hljs
      global; the export's dominant language, absent from the common build),
@@ -76,7 +79,7 @@
             <input type="hidden" name="next" value="{{ request.full_path.rstrip('?') }}">
             <label class="theme-form-label">
               <span class="theme-form-text">Theme</span>
-              <select name="theme" class="theme-form-select" onchange="this.form.submit()">
+              <select name="theme" class="theme-form-select" data-autosubmit>
                 <option value="system" {% if g_theme == 'system' %}selected{% endif %}>System</option>
                 <option value="light" {% if g_theme == 'light' %}selected{% endif %}>Light</option>
                 <option value="dark" {% if g_theme == 'dark' %}selected{% endif %}>Dark</option>
@@ -140,9 +143,9 @@
           {% elif c == "projects" %}<li>No projects file — project pages and project names are unavailable.</li>
           {% elif c == "memories" %}<li>No memories file — the Memory page is unavailable.</li>
           {% elif c == "light_metadata" %}<li>No account file — account details and login history are unavailable.</li>
-          {% elif c == "frames" %}<li>No frames file — published artifacts are unavailable.</li>
+          {% elif c == "frames" %}<li>No published artifacts file — published artifacts are unavailable.</li>
           {% elif c == "artifact_data" %}<li>No artifact data file — data saved by published artifacts is unavailable.</li>
-          {% elif c == "claude_code_cloud" %}<li>No Claude Code cloud file — scheduled tasks and their run history are unavailable.</li>
+          {% elif c == "claude_code_cloud" %}<li>No Claude Code file — scheduled tasks and their run history are unavailable.</li>
           {% else %}<li>No {{ c }} file — this version of the viewer doesn't use it yet.</li>
           {% endif %}
         {% endfor %}
@@ -150,6 +153,13 @@
       {% if g_manifest_status %}
         <p class="degraded-banner-manifest">The manifest lists {{ g_manifest_status[0] }} files; {{ g_manifest_status[1] }} were supplied.</p>
       {% endif %}
+    </aside>
+  {% endif %}
+
+  {% if g_orphan_paused %}
+    {# E2 (amendment A11): a partial set pauses orphan checks; tags are kept. #}
+    <aside class="orphan-banner orphan-paused" role="status">
+      {% for line in g_orphan_paused %}<p>{{ line }}</p>{% endfor %}
     </aside>
   {% endif %}
 

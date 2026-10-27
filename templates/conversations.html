@@ -99,7 +99,7 @@
     <form method="get" action="{{ url_for('viewer.conversation_list') }}" class="tag-filter">
       <label class="tag-filter-label">
         <span class="tag-filter-text">Filter:</span>
-        <select name="tag" onchange="this.form.submit()" class="tag-filter-select">
+        <select name="tag" data-autosubmit class="tag-filter-select">
           <option value="" {% if not tag_filter %}selected{% endif %}>All conversations</option>
           <option value="untagged" {% if tag_filter == 'untagged' %}selected{% endif %}>Untagged</option>
           <option value="no-project" {% if tag_filter == 'no-project' %}selected{% endif %}>

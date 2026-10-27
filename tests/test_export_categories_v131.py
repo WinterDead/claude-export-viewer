@@ -31,9 +31,10 @@ D1 = (
     "{filename} isn't a file this version of the viewer recognises, so it was skipped. "
     "The rest of your export loaded."
 )
+# D2 as amended by E4 (v1.4.0 review): the category's display label.
 D2 = (
-    "{filename} looks like a {category} file but couldn't be read, so it was skipped. "
-    "The rest of your export loaded."
+    "{filename} looks like your export's {label} file but couldn't be read, so it was "
+    "skipped. The rest of your export loaded."
 )
 D4 = (
     "Current exports can also include files for published artifacts, artifact data, and "
@@ -195,7 +196,7 @@ def test_unreadable_later_category_is_skipped_with_d2(app_factory, current_dir, 
     ]
     assert _post_files(client, page, [*files, BROKEN_FRAMES]).status_code == 302
     home = client.get("/").get_data(as_text=True)
-    assert D2.format(filename="frames-000.zip", category="frames") in _text(home)
+    assert D2.format(filename="frames-000.zip", label="published artifacts") in _text(home)
     if page == "/upload":
         stored = {p.name for p in flask_app.config["ACTIVE_SET_PATH"].iterdir()}
         assert "frames-000.zip" not in stored
@@ -235,11 +236,9 @@ def test_manifest_banner_names_missing_later_categories(app_factory, current_dir
     )
     text = _text(client.get("/").get_data(as_text=True))
     assert "Loaded 4 of 7 export categories." in text
-    assert "No frames file — published artifacts are unavailable." in text
+    assert "No published artifacts file — published artifacts are unavailable." in text
     assert "No artifact data file — data saved by published artifacts is unavailable." in text
-    assert (
-        "No Claude Code cloud file — scheduled tasks and their run history are unavailable." in text
-    )
+    assert "No Claude Code file — scheduled tasks and their run history are unavailable." in text
     assert "The manifest lists 7 files; 4 were supplied." in text
 
 
@@ -287,7 +286,7 @@ def test_new_categories_alone_count_against_the_core_four(app_factory, fixtures_
     assert _post_files(client, "/upload", files).status_code == 302
     text = _text(client.get("/").get_data(as_text=True))
     assert "Loaded 0 of 4 export categories." in text
-    assert "No frames file" not in text
+    assert "No published artifacts file" not in text
 
 
 # ---------------------------------------------------------------------------

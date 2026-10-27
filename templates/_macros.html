@@ -15,7 +15,7 @@
       {% if mem.kind == 'project' %}
         <a href="{{ url_for('viewer.project_detail', uuid=mem.project_uuid) }}"
            class="memory-block-title-link"
-           onclick="event.stopPropagation()">{{ mem.title }}</a>
+           data-stop-propagation>{{ mem.title }}</a>
         {% if mem.is_starter %}
           <span class="badge badge-starter">Starter</span>
         {% endif %}
@@ -78,7 +78,7 @@
     <label class="tag-form-label">
       <span class="tag-form-text">{{ label }}:</span>
       <select name="project_uuid" class="tag-form-select"
-              onchange="this.form.submit()">
+              data-autosubmit>
         <option value="" {% if not current_tag %}selected{% endif %}>(Untagged)</option>
         {% if current_tag_orphan %}
           <option value="{{ current_tag }}" selected class="tag-form-orphan">

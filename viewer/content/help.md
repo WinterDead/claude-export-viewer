@@ -119,7 +119,7 @@ Shown whenever the export includes your account file — the [Account](/account)
 
 If your export includes published artifacts, the [Artifacts](/artifacts) page lists each one with its type, its number of versions, and when it was last updated. An artifact's page shows its description and its versions — the active version is marked and opens by default — and then the content itself: a preview for an **Artifact** (a web page), or the text for a **Document**.
 
-The preview is a safe copy of the page: the viewer doesn't run its scripts and doesn't load anything from the web, so an interactive artifact may look incomplete. The written content of a script-driven artifact is listed under **Content files**, where each file expands in place. **View source** shows the page's HTML, and **Download** saves the version: the page itself, or a ZIP of its files at their original paths (a Document downloads as its text).
+The preview is a safe copy of the page: the viewer doesn't run its scripts and doesn't load anything from the web, so an interactive artifact may look incomplete. Fonts bundled with an artifact aren't loaded either, so its text uses your system's fonts. The written content of a script-driven artifact is listed under **Content files**, where each file expands in place. **View source** shows the page's HTML, and **Download** saves the version: the page itself, or a ZIP of its files at their original paths (a Document downloads as its text).
 
 Below the content come the version's files, each checked against the export's own record; any comments on a document; any data the artifact saved, grouped by collection; and the conversations that mention it. In those conversations, the tool card links back with **Open in Artifacts**. Saved data whose artifact isn't in your export is listed at the end of the Artifacts page.
 
@@ -196,6 +196,8 @@ A privacy note on destinations: the export files contain your complete conversat
 ## What the viewer doesn't keep
 
 Thinking blocks in current-format exports carry a verification signature — an opaque cryptographic blob with no human-readable content. The viewer doesn't display, store, or cache signatures; dropping them keeps the local cache smaller. A few other technical fields (per-block timing, search-result link lists) are preserved but not yet displayed. If you have a use for any of these, open an issue on GitHub.
+
+The viewer never contacts the internet, so an image in a conversation or document that points to a web address isn't loaded. It shows as a broken image or its description instead.
 
 ## Troubleshooting
 

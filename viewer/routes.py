@@ -69,15 +69,17 @@ from viewer.parser import (
     validate_category_zip,
 )
 from viewer.render import (
+    category_label,
     compute_render_path,
     conversation_display_title,
     slugify,
     split_frontmatter,
     split_help_page,
     split_memory_sections,
+    web_url,
 )
 from viewer.search import SearchHit, index_export, search
-from viewer.state import compute_tag_state, purge_orphan_tags
+from viewer.state import compute_tag_state, paused_notices, purge_orphan_tags
 from viewer.tagging import (
     NO_PROJECT_LABEL,
     NO_PROJECT_SENTINEL,
@@ -129,9 +131,10 @@ SKIPPED_FILE_NOTICE = (
     "{filename} isn't a file this version of the viewer recognises, so it was skipped. "
     "The rest of your export loaded."
 )
+# D2 as amended by E4: the category's display label, not its raw key.
 INVALID_CATEGORY_NOTICE = (
-    "{filename} looks like a {category} file but couldn't be read, so it was skipped. "
-    "The rest of your export loaded."
+    "{filename} looks like your export's {label} file but couldn't be read, so it was "
+    "skipped. The rest of your export loaded."
 )
 LOAD_NOTICE_CATEGORY = "load-notice"
 
@@ -261,14 +264,19 @@ def index() -> str:
     total_messages = sum(len(c.messages) for c in export.conversations)
     branched = sum(1 for c in export.conversations if c.branch_points)
     project_memories = sum(1 for p in export.projects if p.memory is not None)
+    # Q2 (v1.4.0 review): Home follows the Memory page's legacy rules — the D5
+    # heading in the legacy state, omitted while Hide legacy memory is on.
+    legacy = legacy_memory_state(export)
     global_memory_block = (
         _memory_block(
             kind="global",
             anchor_id="global-memory",
-            title="Conversation memory",
+            title="Legacy memory (no longer updated)" if legacy else "Conversation memory",
             body=export.global_memory.content,
         )
-        if export.global_memory is not None and export.global_memory.content
+        if export.global_memory is not None
+        and export.global_memory.content
+        and not legacy_memory_hidden(export)
         else None
     )
     return render_template(
@@ -280,6 +288,7 @@ def index() -> str:
         project_memories=project_memories,
         orphan_memories=len(export.orphan_project_memories),
         global_memory_block=global_memory_block,
+        legacy_memory_hidden=legacy_memory_hidden(export),
     )
 
 
@@ -309,8 +318,9 @@ def conversation_list() -> str:
         # ``tags`` for the per-row dropdown: live tags + orphan-project tags so
         # the dropdown can render the orphan affordance. Orphan-conv tags don't
         # apply here — those convs aren't in the list at all.
-        tags = {**state.live, **state.orphan_project}
-        orphan_project_tags = state.orphan_project
+        # Held rows (A11) keep their stored value visible in the dropdown.
+        tags = {**state.live, **state.orphan_project, **state.held_project}
+        orphan_project_tags = {**state.orphan_project, **state.held_project}
         live_tags = state.live
         valid_filter = (
             tag_filter is None
@@ -1050,7 +1060,10 @@ def summarise_set(slotted: dict[str, list[str]]) -> str:
         if not names:
             continue
         total += len(names)
-        parts.append(f"{k} ×{len(names)}" if len(names) > 1 else k)
+        # E4: categories by their display labels (manifest and legacy aren't
+        # categories and keep their names).
+        label = category_label(k)
+        parts.append(f"{label} ×{len(names)}" if len(names) > 1 else label)
     return f"{total} file{'s' if total != 1 else ''}: {', '.join(parts)}"
 
 
@@ -1129,7 +1142,9 @@ def upload_post():
             if kind in LATER_CATEGORIES and not _staged_category_valid(dest, kind):
                 dest.unlink(missing_ok=True)
                 unreadable.append(basename)
-                notices.append(INVALID_CATEGORY_NOTICE.format(filename=basename, category=kind))
+                notices.append(
+                    INVALID_CATEGORY_NOTICE.format(filename=basename, label=category_label(kind))
+                )
                 continue
             slotted.setdefault(kind, []).append((dest, basename))
 
@@ -1360,7 +1375,9 @@ def inspect_post():
             continue
         if kind in LATER_CATEGORIES and not _bytes_category_valid(data, kind):
             unreadable.append(basename)
-            notices.append(INVALID_CATEGORY_NOTICE.format(filename=basename, category=kind))
+            notices.append(
+                INVALID_CATEGORY_NOTICE.format(filename=basename, label=category_label(kind))
+            )
             continue
         slotted.setdefault(kind, []).append((basename, data))
 
@@ -1441,9 +1458,10 @@ MANIFEST_PAGE_ERROR = "That file isn't an export manifest."
 
 
 def _https_url(url: str) -> bool:
-    """Links render as anchors only for https URLs with a host (record §8)."""
-    parts = urlsplit(url)
-    return parts.scheme == "https" and bool(parts.netloc)
+    """Links render as anchors only for https URLs with a host (record §8) —
+    the shared web-address check (F2) narrowed to https."""
+    href = web_url(url)
+    return href is not None and urlsplit(href).scheme.lower() == "https"
 
 
 @bp.route("/manifest", methods=["GET"])
@@ -1467,7 +1485,7 @@ def manifest_links_show() -> str:
     rows = [
         {
             "filename": link.filename,
-            "category": link.category,
+            "category": category_label(link.category),
             "url": link.url if _https_url(link.url) else None,
         }
         for link in links.files
@@ -1584,6 +1602,7 @@ def orphans_view() -> str:
     return render_template(
         "orphans.html",
         state=state,
+        paused_notices=paused_notices(state),
         orphan_conv_rows=orphan_conv_rows,
         orphan_project_rows=orphan_project_rows,
     )

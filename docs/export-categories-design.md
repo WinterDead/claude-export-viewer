@@ -38,6 +38,12 @@ Principles, all continuations: one internal model; preserve and flag; **no runti
 calls, and no network reachable from anything the viewer renders**; any subset loads;
 content decides, filenames never do; nothing real in the tree.
 
+Every page the viewer serves carries a
+Content Security Policy that permits no remote origin and no inline script, and every
+URL that comes from an export renders as a link only when its scheme is http or https.
+Ratified 2026-10-27 at the Session U review, after remote Markdown images and an
+unchecked javascript: link were found in rendered content.
+
 ## 2. Verification table (targets, not premises)
 
 Observed in the operator's real exports, aggregate-only. The implementation session
@@ -63,7 +69,7 @@ failure** — record it, and stop only where a divergence contradicts a decision
 | V14 | `claude_code_cloud` layout | `claude_code_cloud/routines.json` and `claude_code_cloud/routine_runs.json`, each `{claude_code_cloud: [...]}` |
 | V15 | Routine record | `routine_id` (`trig_` prefix), `agent_id` (null), `name`, `prompt`, `prompt_withheld` (bool), `enabled` (bool), `schedule {cron, run_once_at}` (exactly one non-null), `created_at`, `updated_at`, `ended_at` (null) |
 | V16 | Run record | `routine_id`, `scheduled_for`, `started_at`, `finished_at`, `status` (`succeeded` only observed), `session_id` (`cse_` prefix); every run's routine exists; most routines have no runs |
-| V17 | Conversation → artifact links | an `Artifact` tool result carries `structured_content.artifact_id` and `structured_content.url`; Docs connector tool inputs carry `input.container.id`; artifact ids also appear in tool-result text; two of three artifacts are referenced (*provisional*: small sample) |
+| V17 | Conversation → artifact links | an `Artifact` tool result carries `structured_content.artifact_id` and `structured_content.url`; Docs connector tool inputs carry `input.container.id`; artifact ids also appear in tool-result text; two of three artifacts are referenced (*provisional*: small sample) Session U: the linking rule (tool input and structured_content only) links one of the three reference artifacts; the earlier "two of three" counted a plain-text mention, which the rule excludes by design. |
 | V18 | New content block | `type: document`, human-sent, keys `file_uuid`, `title` (occasionally absent), `flags`, `start_timestamp`, `stop_timestamp` |
 | V19 | Other new conversation keys | block-level `title`, `file_uuid`, `meta.tool_references`; many new open-set tool `input` keys; attachment `file_type` `text/vtt` |
 | V20 | Legacy memory frozen | `conversations_memory` is byte-identical across the two October exports while `memory_files` changed between them; it differs from the August legacy archive's |
@@ -179,7 +185,10 @@ sanitiser; it is isolated instead. Outcomes, every one test-pinned:
    HTML). Request paths are matched against that list; they are never joined to a
    filesystem path. Traversal, absolute, encoded, and unlisted paths return 404.
 4. The entry page's relative assets (CSS, fonts, images) load from the export; external
-   references (web fonts, CDNs) are blocked by the CSP, never fetched.
+   references (web fonts, CDNs) are blocked by the CSP, never fetched. Fonts are the exception: no artifact file carries
+   a cross-origin header, so bundled fonts don't load in the sandboxed preview and the
+   page uses system fonts. Ratified 2026-10-27; the alternative (Access-Control-Allow-Origin:
+   null) would make files readable by any sandboxed page on any site.
 5. If the entry HTML contains a `<script>` element, the D8 scripts notice shows above the
    preview. If it references any `http(s)` resource, the D8 external-resources notice
    shows.
@@ -295,6 +304,13 @@ For users who receive only the manifest and don't know what to do with it. A pag
 - The previous 1.4+ items (portable tag state; streaming parse; reconstruction of
   tool-call artifacts — now partly superseded by `frames`, re-scoped in its own pass)
   become **1.5+**.
+
+## 12. Tags and partial sets
+
+When the loaded set lacks the conversations
+or projects category, orphan classification and purge for that dimension are suspended,
+and the orphan surfaces say so (E2). A partial upload never puts tags at risk.
+Ratified 2026-10-27.
 
 ## Appendix — user-facing copy (verbatim)
 

@@ -270,11 +270,8 @@ def artifact_file(artifact_id: str, version_id: str, subpath: str) -> Response:
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["Cache-Control"] = "no-store"
-    if resp.mimetype.startswith("font/"):
-        # The sandboxed preview has an opaque origin, and browsers fetch web fonts in
-        # CORS mode — without this, a relative font in the export can't load (outcome
-        # 4). ``null`` admits only opaque origins, and fonts carry no credentials.
-        resp.headers["Access-Control-Allow-Origin"] = "null"
+    # Amendment A10: no artifact file carries any cross-origin header, so bundled
+    # fonts don't load in the opaque-origin preview and it uses system fonts.
     return resp
 
 

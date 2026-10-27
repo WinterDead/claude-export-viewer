@@ -46,8 +46,10 @@
     </div>
   {% elif dc.type == 'rich_link' %}
     {% set link = dc.link or {} %}
+    {% set link_href = link.url | web_url %}
     <div class="display-content display-content-link">
-      <a href="{{ link.url }}">{{ link.title or link.url }}</a>
+      {# F2: a link only when the export's URL is a web address. #}
+      {% if link_href %}<a href="{{ link_href }}">{{ link.title or link.url }}</a>{% else %}{{ link.title or link.url }}{% endif %}
     </div>
   {% elif dc.type == 'rich_content' %}
     <details class="collapsible display-content display-content-json">
@@ -100,8 +102,11 @@
             <ul class="text-sources-list">
               {% for c in block.citations %}
                 {% set c_url = (c.get('details') or {}).get('url') %}
-                {% if c_url %}
-                  <li><a href="{{ c_url }}">{{ c_url }}</a></li>
+                {% set c_href = c_url | web_url %}
+                {% if c_href %}
+                  <li><a href="{{ c_href }}">{{ c_url }}</a></li>
+                {% elif c_url %}
+                  <li>{{ c_url }}</li>
                 {% endif %}
               {% endfor %}
             </ul>

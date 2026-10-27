@@ -163,12 +163,12 @@ def test_served_mime_type_is_the_recorded_one(client) -> None:
         assert client.get(url).mimetype == mime, url
 
 
-def test_font_responses_admit_only_opaque_origins(client) -> None:
-    r = client.get(_file_url(MULTI, bf.MULTI_ACTIVE, "assets/font.woff2"))
-    assert r.headers["Access-Control-Allow-Origin"] == "null"
-    assert "Access-Control-Allow-Credentials" not in r.headers
-    css = client.get(_file_url(MULTI, bf.MULTI_ACTIVE, "assets/style.css"))
-    assert "Access-Control-Allow-Origin" not in css.headers
+def test_no_artifact_file_response_carries_a_cross_origin_header(client) -> None:
+    """Amendment A10: no artifact file — fonts included — is readable cross-origin."""
+    export = client.application.config["EXPORT"]
+    for url, _mime in _all_file_urls(export):
+        headers = client.get(url).headers
+        assert not any(h.lower().startswith("access-control-") for h in headers.keys()), url
 
 
 def test_downloads_write_nothing_under_cache(app_factory, tmp_path: Path) -> None:
