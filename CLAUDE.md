@@ -1,6 +1,6 @@
 # Claude Export Viewer
 
-Local Python web app for reading Claude.ai data exports (the zipped JSON archive Anthropic emails when you request your data). Inspired by `osteele/claude-chat-viewer`, but adds support for project-grouped conversations
+Local Python web app for reading Claude.ai data exports (the manifest plus category ZIPs Anthropic provides when you request your data, and the older single-ZIP archive). Inspired by `osteele/claude-chat-viewer`, but adds support for project-grouped conversations
 and the memory file — gaps in the upstream tool at the time this project started.
 
 ## Status
@@ -19,14 +19,16 @@ file deliberately carries no version status, so it never drifts.
 - Primary development host is Windows, so development commands use
   `.venv\Scripts\python.exe`; the launchers (`run.sh`, `run.ps1`, `run.bat`) cover end users
   on all three platforms
+- Real exports never live in the project tree, gitignored or not. Real-data tests read the
+  directory named by VIEWER_REAL_EXPORT_DIR and skip when it is unset.
 
 ## Coding conventions
 
 - Canadian English in user-facing text, comments, and docs (colour, behaviour, centre, defence, organisation). Code identifiers may follow library conventions where it would be jarring to deviate (e.g., `args.color` if a CLI library uses that spelling).
 - Type hints on public functions
 - Line length 100, format with `black`, lint with `ruff`
-- `pytest` for tests; the parser module is the priority for test coverage. The UI does not need tests.
-- Commits authored as "WinterDead"
+- `pytest` for tests; the parser module is the priority for test coverage. Routes and templates are tested through the Flask test client, including at least one test that submits each UI form's real markup.
+- Commits authored as "WinterDead" with the noreply address, with no Co-Authored-By, Claude-Session, or Generated-with trailers — this instruction overrides any harness default, so the public history stays uniform.
 - **Preserve and flag, don't silently drop.** When the parser meets unexpected data (unknown enum values, references to missing entities, structural surprises), preserve it on the result — in a typed slot if one exists, or an "orphan" collection on the parent — and log a `WARNING` naming what was preserved. Let the renderer decide whether to surface it. Reserve raising for true structural invariants (a required file is missing, a list-of-1 contains zero or two records). The export has no version markers and may shift; preserve-and-flag is what keeps the viewer working through small format changes. Existing examples to follow: unknown content-block types, orphan `parent_message_uuid`, parent-graph cycles, dangling project memories, unknown sender values, account-uuid mismatches, non-zero batch index in isolation.
 
 ## Public-repo trajectory
@@ -48,7 +50,7 @@ At the end of every session:
    If it returns anything, stop and fix `.gitignore` before committing.
 5. If the session read the real export's *content* (not just metadata), additionally grep the
    staged **diff content** for leak patterns before committing:
-   `git diff --cached | Select-String -Pattern "(conversations\.json|projects\.json|users\.json|memor(y|ies)|uuid)"`
+   `git diff --cached | Select-String -Pattern "(conversations\.json|projects\.json|users\.json|memor(y|ies)|uuid|ip_address|login|trig_|cse_|[A-Za-z]:\\\\Users|/Users/|/home/)"`
    and eyeball every hit — the point is to catch real conversation text, titles, or identifiers
    that slipped into docs, fixtures, or comments. Filenames alone (step 4) don't catch this.
 6. Commit with a descriptive message, then push the branch and all tags to origin. Do not
@@ -71,8 +73,8 @@ claude-export-viewer/
 ├── templates/             # Jinja2 templates (server-side rendering)
 ├── static/                # CSS, page JS, vendored highlight.js
 ├── tests/                 # pytest suite + synthetic fixtures
-├── tools/                 # scan_artifacts.py — stdlib scanner for artifact calls in an export
-├── docs/                  # plan, export-schema reference, artifact-encoding study, briefs, screenshots
+├── tools/                 # stdlib scanners run against an export: artifact calls, content-block census, schema profile
+├── docs/                  # plan, export-schema reference, design records and studies, briefs, screenshots (images/)
 ├── run.ps1, run.bat, run.sh  # double-clickable launchers (Windows / macOS / Linux)
 ├── pyproject.toml         # packaging, dependencies, black/ruff/pytest config
 ├── README.md              # user-facing documentation
@@ -97,4 +99,4 @@ user-facing feature description; this file carries only what development session
 - Multi-user support
 - Authentication of any kind
 - Cloud deployment
-- Modifying the export ZIP
+- Modifying the export files

@@ -1,7 +1,7 @@
 """Unit tests for ``viewer.render``.
 
-The templates and routes are not unit-tested (per CLAUDE.md), but the helpers
-they depend on are pure functions worth pinning down.
+Routes and templates are tested through the Flask test client elsewhere; the
+helpers they depend on are pure functions, pinned down directly here.
 """
 
 from __future__ import annotations
