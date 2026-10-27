@@ -979,7 +979,8 @@ details.collapsible > summary {
 /* display_content bodies inside tool cards (v1.3.0, record §9.5): the
    card's flex row wraps, so the body takes a full-width row beneath the
    name line. Prose bodies return to the app font; code stays monospace. */
-.block-card .display-content {
+.block-card .display-content,
+.block-card .display-content-fold {
   flex-basis: 100%;
   min-width: 0;
 }
@@ -1755,9 +1756,8 @@ details.collapsible > summary {
   padding-left: 1.4rem;
 }
 
-/* v1.3.1 page elements: the D4 note on Home, the legacy memory group (D5)
-   and its control, the manifest links page (D7), the document card (D6). */
-.kept-categories-note,
+/* v1.3.1 page elements: the legacy memory group (D5) and its control, the
+   manifest links page (D7), the document card (D6). */
 .memory-legacy-note,
 .manifest-created {
   color: var(--muted);

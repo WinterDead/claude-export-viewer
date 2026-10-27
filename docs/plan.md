@@ -639,10 +639,13 @@ format (manifest + four category zips replacing the single zip) and the memory s
     Release; release audit — `pip-audit` in a scratch venv, the arc-wide
     stranger-read sweep, and the R Phase 2 eight-claim table fully closed.
 
-### v1.3.1 and v1.4.0 — export categories (Session U, in progress)
+### v1.3.1 and v1.4.0 — export categories (Session U; shipped on `session-u`, tags at the operator's review)
 
 Design record: `docs/export-categories-design.md` (ratified 2026-10-27); brief and
-per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase lands:
+per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`); release notes
+`docs/briefs/v1.3.1-release-notes.md` and `docs/briefs/v1.4.0-release-notes.md` for the
+operator's GitHub Releases. Both versions are bumped on the branch (`v1.3.1:` and `v1.4.0:`
+commits); `main` and the tags follow the phase 8 review. Locked decisions:
 
 - **The real export leaves the tree** (record D12, phase 2). The startup load order is
   uploaded export → built-in fixture; the `data/` development copy and its code path are
@@ -698,6 +701,12 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
   and the recorded MIME type; files served by lookup in the recorded list only; fonts carry
   `Access-Control-Allow-Origin: null` (flagged for review); the preview prints as its
   heading plus `Preview not printed.`.
+- **v1.4.0 docs and close** (phase 6). Locked: D4 retired (all three categories are now
+  displayed); Help gains `Published artifacts` and `Scheduled tasks` (D9's intro sentence
+  verbatim, the rest drafted for review); README feature bullets for both; all seven
+  screenshots retaken (the nav changed on every page) and `artifacts.png`,
+  `artifact-detail.png`, `scheduled-tasks.png` added, from the synthetic fixture via an
+  isolated instance, footer and theme control hidden at capture.
 
 ### Later (unscheduled, non-blocking)
 
@@ -715,14 +724,19 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
   2026-09-01 observed plain-text links in replies — the deferred behaviour, not a
   defect), **inline citation anchoring**, **bespoke `rich_content`/`json_block`
   rendering** (plus knowledge `links` rendering), and **structured frontmatter
-  presentation for memory files**; plus whatever lived use surfaces.
+  presentation for memory files**; plus whatever lived use surfaces. (v1.3.1 shipped the
+  A5 size-collapse and both launcher-polish items, which were queued separately; none of
+  the toggles above shipped, and they stay queued.)
 - Embedded-HTML display policy — the viewer and print strip disallowed HTML tags from
   displayed text (a literal `<details>` typed in a message vanishes from display), losing
   characters the author wrote; evaluate escape-to-visible-text as the display default, and
   separately whether closed, well-formed details blocks deserve real collapsible
   rendering — a sanitiser-allowlist decision requiring its own written brief.
 
-### 1.4+ (unscheduled)
+### 1.5+ (unscheduled)
+
+Renamed from "1.4+" when v1.4.0 took the export-categories scope (record §1); the items
+are unchanged except the extraction item's note.
 
 Order between the two larger items below is undecided until development resumes; the
 current lean is portable tag state first.
@@ -731,7 +745,9 @@ current lean is portable tag state first.
   create artifacts of every type — edit histories, rewrites, branch divergence — export, and
   inspect the designed corpus before designing the feature; combine with the file-tools scan
   (`create_file`/`str_replace` bodies) since the two may be one "recover authored content"
-  feature. Do not build against the current export's biased sample.
+  feature. Do not build against the current export's biased sample. *(Now partly
+  superseded by `frames`: published artifacts display since v1.4.0. Reconstructing
+  tool-call artifacts is re-scoped in its own pass — export-categories record §11.)*
 - Portable, mergeable tag state (full profile system). The tag database is the app's only
   irreplaceable state; the export is re-downloadable, the triage work is not. The hard part
   is reconciliation semantics for one user across multiple machines (last-write-wins,

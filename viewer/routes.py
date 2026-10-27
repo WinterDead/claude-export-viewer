@@ -280,8 +280,6 @@ def index() -> str:
         project_memories=project_memories,
         orphan_memories=len(export.orphan_project_memories),
         global_memory_block=global_memory_block,
-        # D4 (v1.3.1): said when the loaded set carries any later category.
-        kept_categories=any(c in export.categories for c in LATER_CATEGORIES),
     )
 
 

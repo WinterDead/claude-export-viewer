@@ -40,6 +40,18 @@ Reading a conversation in dark mode:
 
 ![A conversation rendered in the dark theme, with a collapsed thinking block](docs/images/conversation-dark.png)
 
+The Artifacts page, listing published artifacts:
+
+![The Artifacts page: a table of published artifacts with their type, version count, and last update](docs/images/artifacts.png)
+
+An artifact's page, with its version list, the sandboxed preview, and its page source:
+
+![An artifact's page showing its versions with the active one marked, a scripts notice, and the preview](docs/images/artifact-detail.png)
+
+The Scheduled tasks page, with one task's prompt expanded:
+
+![The Scheduled tasks page: a table of tasks with their schedules, one prompt expanded, and the run history](docs/images/scheduled-tasks.png)
+
 ## Features
 
 - **Current and legacy export formats.** Loads the current multi-file export — a
@@ -58,11 +70,18 @@ Reading a conversation in dark mode:
   range selection is built in.
 - **Memory rendering.** Claude's conversation memory, its memory files (grouped by
   folder, metadata headers shown verbatim), and per-project memories, all with
-  collapsible sections.
+  collapsible sections. Once an export has memory files, the older summary is marked as no
+  longer updated, and can be hidden.
 - **Account page.** Your account details and, whenever the export includes it, your login
   history — shown because it's your data.
+- **Published artifacts.** Every artifact you published, with its versions, a safe preview
+  (no scripts, nothing loaded from the web), its files, comments, and saved data — and links
+  between each artifact and the conversations that published it.
+- **Scheduled tasks.** Claude Code scheduled tasks with their prompts, schedules, and run
+  history.
 - **Full-text search** (SQLite FTS5) across messages — including alternate branches — titles,
-  summaries, projects, knowledge documents, and memory. Natural-language queries work as-is; a
+  summaries, projects, knowledge documents, memory, published artifacts, and scheduled
+  tasks. Natural-language queries work as-is; a
   built-in syntax guide covers phrases, prefixes, proximity, and boolean operators. Results
   link to the exact message, on the right branch.
 - **Upload history.** Every export load is recorded — when, the filename, a content

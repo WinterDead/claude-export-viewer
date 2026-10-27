@@ -16,8 +16,6 @@ The export contains your conversations (including messages on alternate branches
 
 Choose your export files and upload them together — every ZIP from a current export plus, optionally, the manifest, or a single legacy ZIP. You can load a partial set; a banner will tell you what's missing and which features are affected. A file the viewer doesn't recognise is skipped with a notice, and the rest of your export loads.
 
-Current exports can also include files for published artifacts, artifact data, and Claude Code scheduled tasks. This version accepts them with the rest of your export and keeps them, but doesn't display them yet.
-
 Your manifest file contains live, signed download links to your export. Treat it like the export itself: don't share it, post it, or commit it anywhere public.
 
 Uploads are capped at 200 MB per file — more than any export file seen so far. If yours ever exceeds it, set the VIEWER_MAX_UPLOAD_MB environment variable before launching to raise the cap.
@@ -117,9 +115,21 @@ When your export includes memory files, the older memory summary is shown last, 
 
 Shown whenever the export includes your account file — the [Account](/account) page displays the identity data in your archive (name, email, and account ID) and, for current exports, your **login history**: a table of recorded logins, newest first, with the timestamp (in your local time), method, IP address, location, and browser and operating system. Single-ZIP exports include login history only when the archive carries it (older ones don't); when it's absent, the page says so. It's your data — the viewer shows everything the archive contains.
 
+## Published artifacts
+
+If your export includes published artifacts, the [Artifacts](/artifacts) page lists each one with its type, its number of versions, and when it was last updated. An artifact's page shows its description and its versions — the active version is marked and opens by default — and then the content itself: a preview for web-page artifacts, or the text for document artifacts.
+
+The preview is a safe copy of the page: the viewer doesn't run its scripts and doesn't load anything from the web, so an interactive artifact may look incomplete. The written content of a script-driven artifact is listed under **Content files**, where each file expands in place. **View source** shows the page's HTML, and **Download** saves the version exactly as it is in your export.
+
+Below the content come the version's files, each checked against the export's own record; any comments on a document; any data the artifact saved, grouped by collection; and the conversations that mention it. In those conversations, the tool card links back with **Open in Artifacts**. Saved data whose artifact isn't in your export is listed at the end of the Artifacts page.
+
+## Scheduled tasks
+
+Claude Code scheduled tasks (called routines in the export files) are listed with their prompts, schedules, and run history. The [Scheduled tasks](/scheduled-tasks) page shows each task's schedule, whether it's enabled, when it was created, and when it last ran; expand **Prompt** to read what it asks Claude to do. The export doesn't include the sessions themselves, so each run shows its session ID as text. Runs for tasks that aren't in your export are kept in their own section.
+
 ## Search
 
-Search runs across everything indexed: conversation titles and summaries, every message (including alternate branches), project names and descriptions, knowledge documents, and all memory — the conversation memory, memory files, and project memories.
+Search runs across everything indexed: conversation titles and summaries, every message (including alternate branches), project names and descriptions, knowledge documents, all memory — the conversation memory, memory files, and project memories — and published artifacts and scheduled tasks.
 
 Just type naturally — punctuation, apostrophes, and hyphens are handled for you. For exact phrases, prefix matching, proximity, and boolean operators, open the **Search syntax guide** on the [search page](/search) itself.
 

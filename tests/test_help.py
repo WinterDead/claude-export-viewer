@@ -143,14 +143,24 @@ def test_every_source_heading_has_a_resolving_anchor(help_body: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_internal_links_resolve(client, help_body: str) -> None:
+def test_internal_links_resolve(client, help_body: str, tmp_path: Path) -> None:
     hrefs = set(re.findall(r'href="(/[^"]*)"', help_body))
     assert any(h.startswith("/conversations?tag=untagged") for h in hrefs)
     assert "/history" in hrefs
     assert "/search" in hrefs
-    for href in sorted(hrefs):
+    # The category pages answer only when the viewed export has the category
+    # (export-categories §6.2, the Account rule); they're checked against the
+    # current-format fixture, which has both.
+    category_pages = {"/artifacts", "/scheduled-tasks"}
+    assert category_pages <= hrefs
+    for href in sorted(hrefs - category_pages):
         r = client.get(href)
         assert r.status_code < 400, f"{href} returned {r.status_code}"
+    current = create_app(
+        Path(__file__).resolve().parent / "fixtures" / "current", db_path=tmp_path / "c.sqlite"
+    ).test_client()
+    for href in sorted(category_pages):
+        assert current.get(href).status_code == 200, href
 
 
 # ---------------------------------------------------------------------------
@@ -331,7 +341,8 @@ def test_readme_getting_your_export_carries_d7() -> None:
 
 def test_help_carries_v131_copy() -> None:
     src = _help_source()
-    assert D4_HELP in src
+    # D4 was v1.3.1-only: removed in v1.4.0 for the categories it displays.
+    assert D4_HELP not in src
     assert D5_HELP_MEMORY in src
     assert D5_HELP_APPEARANCE in src
     assert "[Download links](/manifest)" in src

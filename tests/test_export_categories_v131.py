@@ -295,11 +295,12 @@ def test_new_categories_alone_count_against_the_core_four(app_factory, fixtures_
 # ---------------------------------------------------------------------------
 
 
-def test_home_says_later_categories_are_kept(app_factory, full_set) -> None:
+def test_kept_not_displayed_line_retired_in_v140(app_factory, full_set) -> None:
+    """D4 shipped in v1.3.1 and is removed in v1.4.0, which displays all three
+    categories (record appendix D4)."""
     client = app_factory().test_client()
-    assert D4 not in _text(client.get("/").get_data(as_text=True))  # legacy fixture
     assert _post_files(client, "/upload", full_set).status_code == 302
-    assert D4 in _text(client.get("/").get_data(as_text=True))
+    assert D4 not in _text(client.get("/").get_data(as_text=True))
 
 
 # ---------------------------------------------------------------------------
