@@ -38,7 +38,7 @@
             <td>{% if t.cron %}Repeats: <code>{{ t.cron }}</code>{% elif t.run_once_at %}Once: {{ t.run_once_at | format_local }}{% else %}—{% endif %}</td>
             <td>{% if t.enabled %}Yes{% else %}No{% endif %}</td>
             <td>{{ t.created_at | format_local }}</td>
-            <td>{% if runs %}{{ runs[0].scheduled_for | format_local }}{% else %}Never{% endif %}</td>
+            <td>{% if runs %}{{ (runs[0].started_at or runs[0].scheduled_for) | format_local }}{% else %}Never{% endif %}</td>
           </tr>
           <tr class="task-prompt-row">
             <td colspan="5">

@@ -818,8 +818,9 @@ SEARCH_RESULT_LIMIT = 200
 @bp.route("/search")
 def search_view() -> str:
     """Single-field FTS5 search across conversations, messages, projects,
-    docs, and memory. Hits are grouped by their owning entity so a
-    conversation with multiple matching messages renders as one card.
+    docs, memory, published artifacts, and scheduled tasks. Hits are grouped
+    by their owning entity so a conversation with multiple matching messages
+    renders as one card.
 
     In inspect mode the query runs against the inspected export's in-memory
     index — the primary FTS index in ``cache/viewer.sqlite`` is never read
@@ -836,8 +837,10 @@ def search_view() -> str:
     # Record §7: in the legacy state the summary's hit carries the D5 label,
     # and the hide setting removes it (display only — the index and the
     # result count are unchanged).
-    if legacy_memory_hidden(export):
+    if legacy_memory_hidden(export) and memory_global is not None:
         memory_global = None
+        # Keep the shown count honest: the hidden hit leaves the total too.
+        results = dataclasses.replace(results, total=max(results.total - 1, 0))
 
     return render_template(
         "search.html",

@@ -1,6 +1,6 @@
 # Help
 
-This app is a local viewer for your Claude data export — the files Anthropic provides when you request your data. It parses the export on your machine and gives you a browsable, searchable interface over your conversations, projects, memory, and account data. Everything runs locally: your export is never uploaded anywhere, and nothing leaves your computer.
+This app is a local viewer for your Claude data export — the files Anthropic provides when you request your data. It parses the export on your machine and gives you a browsable, searchable interface over your conversations, projects, memory, account data, published artifacts, and Claude Code scheduled tasks. Everything runs locally: your export is never uploaded anywhere, and nothing leaves your computer.
 
 The sections below cover everything from requesting an export to advanced tagging workflows. Click any heading to expand it.
 
@@ -117,9 +117,9 @@ Shown whenever the export includes your account file — the [Account](/account)
 
 ## Published artifacts
 
-If your export includes published artifacts, the [Artifacts](/artifacts) page lists each one with its type, its number of versions, and when it was last updated. An artifact's page shows its description and its versions — the active version is marked and opens by default — and then the content itself: a preview for web-page artifacts, or the text for document artifacts.
+If your export includes published artifacts, the [Artifacts](/artifacts) page lists each one with its type, its number of versions, and when it was last updated. An artifact's page shows its description and its versions — the active version is marked and opens by default — and then the content itself: a preview for an **Artifact** (a web page), or the text for a **Document**.
 
-The preview is a safe copy of the page: the viewer doesn't run its scripts and doesn't load anything from the web, so an interactive artifact may look incomplete. The written content of a script-driven artifact is listed under **Content files**, where each file expands in place. **View source** shows the page's HTML, and **Download** saves the version exactly as it is in your export.
+The preview is a safe copy of the page: the viewer doesn't run its scripts and doesn't load anything from the web, so an interactive artifact may look incomplete. The written content of a script-driven artifact is listed under **Content files**, where each file expands in place. **View source** shows the page's HTML, and **Download** saves the version: the page itself, or a ZIP of its files at their original paths (a Document downloads as its text).
 
 Below the content come the version's files, each checked against the export's own record; any comments on a document; any data the artifact saved, grouped by collection; and the conversations that mention it. In those conversations, the tool card links back with **Open in Artifacts**. Saved data whose artifact isn't in your export is listed at the end of the Artifacts page.
 

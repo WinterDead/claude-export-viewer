@@ -532,3 +532,17 @@ def test_manifest_page_rejects_other_files(app_factory) -> None:
     r = _post_files(client, "/manifest", [("notes.json", b'{"hello": 1}')])
     assert r.status_code == 400
     assert "That file isn't an export manifest." in _text(r.get_data(as_text=True))
+
+
+def test_hidden_legacy_hit_leaves_the_match_count(app_factory) -> None:
+    client = app_factory("current").test_client()
+
+    def count() -> int:
+        text = _text(client.get("/search?q=synthetic+global").get_data(as_text=True))
+        if "No matches for" in text:
+            return 0
+        return int(re.search(r"(\d+) match", text).group(1))
+
+    shown = count()
+    client.set_cookie("viewer_legacy_memory", "hide")
+    assert count() == shown - 1

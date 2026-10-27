@@ -76,7 +76,7 @@ The Scheduled tasks page, with one task's prompt expanded:
   history — shown because it's your data.
 - **Published artifacts.** Every artifact you published, with its versions, a safe preview
   (no scripts, nothing loaded from the web), its files, comments, and saved data — and links
-  between each artifact and the conversations that published it.
+  between each artifact and the conversations that mention it.
 - **Scheduled tasks.** Claude Code scheduled tasks with their prompts, schedules, and run
   history.
 - **Full-text search** (SQLite FTS5) across messages — including alternate branches — titles,
