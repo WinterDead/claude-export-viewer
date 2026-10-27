@@ -120,6 +120,9 @@ class ToolUseBlock:
     is_mcp: bool = False
     # Rendering-hint dict, shape preserved for the record §9 renderers.
     display_content: dict[str, Any] | None = None
+    # The product's one-line status for the call ("Searching the web…") — the
+    # collapsed display-body teaser (amendment A5, copy U1).
+    message: str | None = None
     start_timestamp: str | None = None
     stop_timestamp: str | None = None
 
@@ -134,6 +137,7 @@ class ToolResultBlock:
     # ``meta.output_format_category`` — ``md`` routes the result text through
     # the Markdown pipeline (record §9.6).
     output_format_category: str | None = None
+    message: str | None = None
     start_timestamp: str | None = None
     stop_timestamp: str | None = None
 
@@ -1086,6 +1090,7 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
             integration_name=raw.get("integration_name"),
             is_mcp=bool(raw.get("is_mcp_app")) or ":" in name,
             display_content=raw.get("display_content"),
+            message=_optional_str(raw.get("message")),
             start_timestamp=raw.get("start_timestamp"),
             stop_timestamp=raw.get("stop_timestamp"),
         )
@@ -1100,6 +1105,7 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
             output_format_category=(
                 meta.get("output_format_category") if isinstance(meta, dict) else None
             ),
+            message=_optional_str(raw.get("message")),
             start_timestamp=raw.get("start_timestamp"),
             stop_timestamp=raw.get("stop_timestamp"),
         )
@@ -1120,6 +1126,11 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
         logger.warning("unknown content block type %r — preserved as UnknownBlock", block_type)
         seen_warnings.add(key)
     return UnknownBlock(type=str(block_type) if block_type is not None else "", raw=raw)
+
+
+def _optional_str(value: Any) -> str | None:
+    """A non-empty string, or ``None`` for anything else."""
+    return value if isinstance(value, str) and value else None
 
 
 def _parse_summaries(raw: Any, seen_warnings: set[str]) -> list[str]:

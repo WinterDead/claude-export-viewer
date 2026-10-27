@@ -212,3 +212,106 @@ def test_non_md_results_keep_raw_inner_text_out_of_the_page(client) -> None:
     the md behaviour is opt-in by the export's own format hint."""
     body = client.get(f"/conversations/{CONV_TOOLS}").get_data(as_text=True)
     assert "Fetched page body." not in body  # the json_block result's inner text
+
+
+# ---------------------------------------------------------------------------
+# Amendment A5 — display-content bodies collapse by size (copy U1)
+# ---------------------------------------------------------------------------
+
+
+def _render_tool_result(client, display_content: dict, *, message: str | None = None) -> str:
+    """Render the real ``_message.html`` partial around one tool_result block."""
+    from datetime import UTC, datetime
+
+    from viewer.parser import Message, ToolResultBlock
+
+    block = ToolResultBlock(
+        tool_use_id="toolu_a5",
+        name="view",
+        is_error=False,
+        inner=[],
+        display_content=display_content,
+        message=message,
+    )
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    msg = Message(
+        uuid="00000000-0000-0000-0000-00000000a500",
+        sender="assistant",
+        parent_uuid=None,
+        created_at=now,
+        updated_at=now,
+        content=[block],
+    )
+    app = client.application
+    with app.test_request_context():
+        return app.jinja_env.get_template("_message.html").render(msg=msg)
+
+
+FOLD_RE = re.compile(
+    r'<details class="collapsible display-content-fold">\s*<summary>(.*?)</summary>', re.S
+)
+
+
+def test_a5_constants_are_named_in_render() -> None:
+    from viewer import render
+
+    assert render.DISPLAY_BODY_COLLAPSE_LINES == 30
+    assert render.DISPLAY_BODY_COLLAPSE_CHARS == 2000
+
+
+def test_a5_body_under_both_thresholds_renders_open(client) -> None:
+    text = "\n".join(f"line {n}" for n in range(30))  # exactly 30 lines, short
+    html = _render_tool_result(client, {"type": "text", "text": text}, message="Read a file")
+    assert not FOLD_RE.search(html)
+    assert '<div class="display-content display-content-text">' in html
+
+
+def test_a5_over_line_threshold_only_collapses_with_teaser(client) -> None:
+    text = "\n".join("x" for _ in range(31))  # 31 lines, 61 characters
+    html = _render_tool_result(client, {"type": "text", "text": text}, message="Read a file")
+    m = FOLD_RE.search(html)
+    assert m and m.group(1) == "Read a file (31 lines)"
+
+
+def test_a5_over_character_threshold_only_collapses_with_teaser(client) -> None:
+    code = "\n".join("y" * 200 for _ in range(11))  # 11 lines, 2,210 characters
+    html = _render_tool_result(
+        client, {"type": "code_block", "code": code, "language": "text"}, message=None
+    )
+    m = FOLD_RE.search(html)
+    # No message line: the tool name teases instead.
+    assert m and m.group(1) == "view (11 lines)"
+    assert '<div class="markdown-body display-content display-content-code">' in html
+
+
+def test_a5_over_both_thresholds_collapses_tables_too(client) -> None:
+    table = [["cell " * 20, str(n)] for n in range(40)]
+    html = _render_tool_result(client, {"type": "table", "table": table}, message="Listed rows")
+    m = FOLD_RE.search(html)
+    assert m and m.group(1) == "Listed rows (40 lines)"
+
+
+def test_a5_fold_sits_on_the_shared_collapsible_contract(client) -> None:
+    text = "\n".join("z" for _ in range(50))
+    html = _render_tool_result(client, {"type": "text", "text": text}, message="Read")
+    tag = re.search(r"<details[^>]*>", html).group(0)
+    assert tag == '<details class="collapsible display-content-fold">'
+    assert " open" not in tag
+    assert re.search(r"<details[^>]*>\s*<summary", html)
+
+
+def test_a5_leaves_json_block_and_rich_content_always_collapsed(client) -> None:
+    big = '{"k": "' + "v" * 5000 + '"}'
+    html = _render_tool_result(client, {"type": "json_block", "json_block": big}, message="Big")
+    assert not FOLD_RE.search(html)
+    assert "<summary>json_block</summary>" in html
+    html = _render_tool_result(client, {"type": "rich_content", "content": []}, message="Big")
+    assert not FOLD_RE.search(html)
+    assert "<summary>rich_content</summary>" in html
+
+
+def test_a5_fixture_skill_file_renders_collapsed_in_the_reading_view(tools_page: str) -> None:
+    from tests.fixtures.build_fixtures import SKILL_FILE_LINES, SKILL_FILE_MESSAGE
+
+    teasers = [m.group(1) for m in FOLD_RE.finditer(tools_page)]
+    assert f"{SKILL_FILE_MESSAGE} ({SKILL_FILE_LINES} lines)" in teasers

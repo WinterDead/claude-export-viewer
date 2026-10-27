@@ -43,6 +43,7 @@ from viewer.parser import ALL_CATEGORIES, Export, ExportFormatError, load_export
 from viewer.render import (
     block_type,
     conversation_display_title,
+    display_body_fold,
     format_local,
     format_local_relative,
     markdown_to_html,
@@ -241,6 +242,7 @@ def create_app(
     app.jinja_env.filters["slugify"] = slugify
     app.jinja_env.filters["sender_label"] = sender_label
     app.jinja_env.filters["pretty_json"] = pretty_json
+    app.jinja_env.filters["display_body_fold"] = display_body_fold
 
     # No-Project sentinel (v1.1 Session B): templates render the option value
     # and label from the same constants the tagging layer defines, so the

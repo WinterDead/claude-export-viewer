@@ -10,7 +10,23 @@
    - injected_prompt  → labelled collapsible card, collapsed by default
    Artifacts and nested tool_result rendering remain deferred. #}
 
-{% macro display_content_body(dc) %}
+{% macro display_content_body(dc, label) %}
+  {# Amendment A5: a sized body over 30 lines or 2,000 characters renders
+     pre-collapsed on the shared contract, teased by the block's message
+     line (or its tool name) and the line count (copy U1). Shorter bodies
+     render open; the always-collapsed fallbacks below are unchanged. #}
+  {% set fold_lines = dc | display_body_fold %}
+  {% if fold_lines %}
+    <details class="collapsible display-content-fold">
+      <summary>{{ label }} ({{ fold_lines }} line{% if fold_lines != 1 %}s{% endif %})</summary>
+      {{ display_content_inner(dc) }}
+    </details>
+  {% else %}
+    {{ display_content_inner(dc) }}
+  {% endif %}
+{% endmacro %}
+
+{% macro display_content_inner(dc) %}
   {# Record §9.5: display_content becomes the tool card's body. The type set
      is open — json_block, rich_content, and anything unknown fall back to a
      collapsed preformatted JSON view. The code_block markup rides the
@@ -112,7 +128,7 @@
           <span class="block-card-name">{{ block.name }}</span>
           {% if block.is_mcp %}<span class="block-card-mcp">MCP</span>{% endif %}
           {% if block.display_content %}
-            {{ display_content_body(block.display_content) }}
+            {{ display_content_body(block.display_content, block.message or block.name) }}
           {% endif %}
         </aside>
       {% elif bt == 'tool_result' %}
@@ -124,7 +140,7 @@
             {% if block.is_error %} · error{% endif %}
           </span>
           {% if block.display_content %}
-            {{ display_content_body(block.display_content) }}
+            {{ display_content_body(block.display_content, block.message or block.name) }}
           {% elif block.output_format_category == 'md' %}
             {# Record §9.6: md-format results render their text through the
                existing Markdown→sanitiser pipeline. #}

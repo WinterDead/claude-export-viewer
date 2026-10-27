@@ -187,6 +187,13 @@ Six behaviours, all shipping in v1.3.0:
    is a 1.3.x candidate (§11).
 6. **`output_format_category: md`** tool results render their text through the existing
    Markdown→sanitiser pipeline.
+7. Display-content bodies collapse by size. A body whose rendered source exceeds 30 lines
+   or 2,000 characters — whichever comes first — renders pre-collapsed on the shared
+   collapsible contract, teased by the tool's own message line (or its name) and the line
+   count; shorter bodies render open. The thresholds are named constants, not settings.
+   This applies to every display-content type that renders a body; json_block and
+   rich_content remain always-collapsed. Ratified 2026-09 after lived use showed
+   document-sized tool results (a skill file read by the view tool) rendering in full.
 
 **Constraint, recorded as a hard stop**: none of the above requires a sanitiser-allowlist
 change — tables and cards are template-built from data, and Markdown rendering reuses the

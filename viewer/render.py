@@ -615,6 +615,57 @@ def split_frontmatter(content: str) -> tuple[str | None, str]:
     return None, content
 
 
+# Amendment A5 (``docs/format-support-design.md`` §9): a display-content body
+# whose rendered source exceeds either threshold renders pre-collapsed on the
+# shared ``collapsible`` contract. Named constants, deliberately not settings.
+DISPLAY_BODY_COLLAPSE_LINES = 30
+DISPLAY_BODY_COLLAPSE_CHARS = 2000
+
+# Display-content types that render an open body and so take the size rule.
+# ``json_block``, ``rich_content``, and unknown types stay always-collapsed.
+SIZED_DISPLAY_TYPES = frozenset({"text", "code_block", "table", "rich_link"})
+
+
+def display_body_source(dc: dict | None) -> str:
+    """The source text a sized display-content body renders, for measuring."""
+    if not isinstance(dc, dict):
+        return ""
+    kind = dc.get("type")
+    if kind == "text":
+        return str(dc.get("text") or "")
+    if kind == "code_block":
+        return str(dc.get("code") or "")
+    if kind == "table":
+        rows = dc.get("table") or []
+        return "\n".join(
+            "\t".join(str(cell) for cell in row) if isinstance(row, list) else str(row)
+            for row in rows
+        )
+    if kind == "rich_link":
+        link = dc.get("link") or {}
+        return f"{link.get('title') or ''}\n{link.get('url') or ''}"
+    return ""
+
+
+def fold_line_count(source: str | None) -> int:
+    """The line count to tease a collapsed body with, or ``0`` when the source
+    is within both A5 thresholds and renders open."""
+    text = source or ""
+    lines = len(text.splitlines()) or 1
+    if lines > DISPLAY_BODY_COLLAPSE_LINES or len(text) > DISPLAY_BODY_COLLAPSE_CHARS:
+        return lines
+    return 0
+
+
+def display_body_fold(dc: dict | None) -> int:
+    """A5 for one display-content dict: ``0`` renders open, otherwise the
+    collapsed teaser's line count. Always-collapsed types return ``0`` — the
+    template keeps their own fallback card."""
+    if not isinstance(dc, dict) or dc.get("type") not in SIZED_DISPLAY_TYPES:
+        return 0
+    return fold_line_count(display_body_source(dc))
+
+
 def pretty_json(value: object) -> str:
     """Indented JSON for the collapsed preformatted fallback views (record
     §9.5). ``ensure_ascii=False`` keeps non-ASCII content readable."""

@@ -893,6 +893,7 @@ def _current_conversations() -> list[dict[str, Any]]:
 
     pair2 = "toolu_synthetic_follow_1"
     pair3 = "toolu_synthetic_mcp_1"
+    pair4 = "toolu_synthetic_view_1"
     conv_2["chat_messages"][1]["content"] = [
         thinking,
         _thinking_block_current("Second reasoning pass without summaries."),
@@ -935,6 +936,10 @@ def _current_conversations() -> list[dict[str, Any]]:
             [{"type": "text", "text": "**Bold** markdown result with `code`."}],
             meta={"output_format_category": "md"},
         ),
+        # A document-sized display body (amendment A5): renders pre-collapsed,
+        # teased by the result's own message line.
+        _tool_use_current(pair4, "view", {"type": "text", "text": "Reading a file"}),
+        _view_skill_result(pair4),
         final_text,
     ]
 
@@ -1019,6 +1024,26 @@ def _docs_update_use(tool_id: str) -> dict[str, Any]:
         "payload": "Synthetic edit text.",
     }
     return block
+
+
+SKILL_FILE_LINES = 42
+SKILL_FILE_MESSAGE = "Read the synthetic skill file"
+
+
+def _view_skill_result(tool_id: str) -> dict[str, Any]:
+    """A view-tool result whose display body is a whole synthetic file."""
+    body = "\n".join(
+        f"Line {n:02d} of a synthetic skill file used to exercise size collapse."
+        for n in range(1, SKILL_FILE_LINES + 1)
+    )
+    result = _tool_result_current(
+        tool_id,
+        "view",
+        [{"type": "text", "text": body}],
+        display_content={"type": "text", "text": body},
+    )
+    result["message"] = SKILL_FILE_MESSAGE
+    return result
 
 
 def _conversations_zip(convs: list[dict[str, Any]]) -> dict[str, bytes]:
