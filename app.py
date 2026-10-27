@@ -42,7 +42,13 @@ from viewer.db import close_db, get_db
 from viewer.history import init_db as init_history_db
 from viewer.history import record_startup_load
 from viewer.inspect import get_inspection
-from viewer.parser import ALL_CATEGORIES, Export, ExportFormatError, load_export
+from viewer.parser import (
+    CORE_CATEGORIES,
+    KNOWN_CATEGORIES,
+    Export,
+    ExportFormatError,
+    load_export,
+)
 from viewer.render import (
     block_type,
     conversation_display_title,
@@ -61,6 +67,7 @@ from viewer.routes import (
     THEME_COOKIE,
     THEMES,
     bp,
+    manifest_categories_for_set,
     manifest_status_for_set,
     summarise_set_dir,
 )
@@ -196,6 +203,11 @@ def create_app(
     app.config["EXPORT"] = export
     app.config["STORED_EXPORT_FAILED"] = stored_export_failed
     app.config["MANIFEST_STATUS"] = manifest_status
+    # The stored manifest's categories — A7's expected set (export-categories
+    # record §4). Only a default startup reads a stored set.
+    app.config["MANIFEST_CATEGORIES"] = (
+        manifest_categories_for_set(ACTIVE_SET) if export_source is None else ()
+    )
     app.config["DB_PATH"] = db_path if db_path is not None else DB_PATH
     app.config["ACTIVE_SET_PATH"] = ACTIVE_SET
     app.config["ACTIVE_ZIP_PATH"] = ACTIVE_ZIP
@@ -264,16 +276,23 @@ def create_app(
             # Banner is informational; never block a page render on its
             # computation. Defensive against e.g. DB connection oddities.
             orphan_count = 0
-        # Degraded-view banner (record §4, copy C1): which of the four
-        # categories the viewed set is missing, plus the manifest's
-        # expected-vs-supplied counts when one was supplied. Follows the
-        # view — an inspected subset is described as truthfully as the
-        # active one.
-        missing = [c for c in ALL_CATEGORIES if c not in live_export.categories]
+        # Degraded-view banner (record §4, copy C1; A7 and D3 since v1.3.1):
+        # with a manifest, the expected categories are its distinct
+        # categories and every missing one gets a line — unknown names
+        # included; without one, only the four core categories count.
+        # Follows the view — an inspected subset is described as truthfully
+        # as the active one.
         if inspect_state is not None:
             manifest_status = inspect_state.manifest_status
+            expected = inspect_state.manifest_categories or CORE_CATEGORIES
         else:
             manifest_status = app.config.get("MANIFEST_STATUS")
+            expected = app.config.get("MANIFEST_CATEGORIES") or CORE_CATEGORIES
+        missing_set = [c for c in expected if c not in live_export.categories]
+        # Known categories in banner order first, then unknown ones as listed.
+        missing = [c for c in KNOWN_CATEGORIES if c in missing_set] + [
+            c for c in missing_set if c not in KNOWN_CATEGORIES
+        ]
 
         return {
             # ``user`` is None when a current-format set lacks its account
@@ -287,7 +306,8 @@ def create_app(
             "g_inspecting": inspect_state is not None,
             "g_inspect_filename": inspect_state.filename if inspect_state is not None else "",
             "g_missing_categories": missing,
-            "g_loaded_category_count": len(ALL_CATEGORIES) - len(missing),
+            "g_loaded_category_count": len(expected) - len(missing),
+            "g_expected_category_count": len(expected),
             "g_manifest_status": manifest_status,
             # Nav rule (record §8): the Account entry shows whenever
             # users.json is in the viewed set, both formats.

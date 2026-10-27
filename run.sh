@@ -66,7 +66,10 @@ VENV_PY=".venv/bin/python"
 
 create_venv() {
     echo "Creating the project's virtual environment (.venv)..."
-    if ! "$PYTHON" -m venv .venv || [ ! -x "$VENV_PY" ]; then
+    # Python's own output is suppressed here: on Debian-family systems it is
+    # a raw ensurepip error that would print ahead of the friendly message
+    # below (v1.3.1, copy D13). The message says how to see it.
+    if ! "$PYTHON" -m venv .venv >/dev/null 2>&1 || [ ! -x "$VENV_PY" ]; then
         # Debian-family systems ship Python without the venv module; the
         # failed attempt leaves a partial .venv a rerun must not trust.
         rm -rf .venv
@@ -77,6 +80,7 @@ create_venv() {
         echo ""
         echo "then run this script again. On other systems, install the venv module for your"
         echo "Python 3.11+ and rerun."
+        echo "(Python's own error message was hidden; run \"python3 -m venv .venv\" yourself to see it.)"
         exit 1
     fi
 }

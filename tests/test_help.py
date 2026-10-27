@@ -293,9 +293,48 @@ def test_help_carries_c3_signature_disclosure() -> None:
     assert C3_SIGNATURES in src
 
 
-def test_readme_getting_your_export_carries_c8() -> None:
+# v1.3.1: export-categories record D7 replaces C8 as README "Getting your export".
+D7_README = (
+    "In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, "
+    "open **Settings**, go to **Privacy**, and click **Export data**. Anthropic emails you a "
+    "download link — it expires after 24 hours, so download promptly. Current exports arrive "
+    "as a small manifest file listing several ZIP files (conversations, projects, memories, "
+    "account metadata, and — if you use them — published artifacts and Claude Code scheduled "
+    "tasks). The viewer's **Download links** page turns the manifest into one-click links. "
+    "Download them all and upload them to the viewer together, exactly as downloaded — there's "
+    "no need to unzip anything. Older single-ZIP exports load exactly as before. The in-app "
+    "**Help** page covers the rest, from what the export contains to backups and "
+    "troubleshooting."
+)
+D4_HELP = (
+    "Current exports can also include files for published artifacts, artifact data, and "
+    "Claude Code scheduled tasks. This version accepts them with the rest of your export and "
+    "keeps them, but doesn't display them yet."
+)
+D5_HELP_MEMORY = (
+    "When your export includes memory files, the older memory summary is shown last, "
+    "collapsed, and marked as no longer updated. To hide it from the Memory page and search, "
+    "turn on Hide legacy memory. Exports without memory files always show their summary, and "
+    "Inspect mode decides for each export it opens."
+)
+D5_HELP_APPEARANCE = (
+    "The Hide legacy memory choice is remembered the same way, in a cookie named "
+    "viewer_legacy_memory. Nothing is sent anywhere."
+)
+
+
+def test_readme_getting_your_export_carries_d7() -> None:
     readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
-    assert C8_README in readme
+    assert D7_README in " ".join(readme.split())
+    assert C8_README not in readme
+
+
+def test_help_carries_v131_copy() -> None:
+    src = _help_source()
+    assert D4_HELP in src
+    assert D5_HELP_MEMORY in src
+    assert D5_HELP_APPEARANCE in src
+    assert "[Download links](/manifest)" in src
 
 
 def test_help_no_stale_single_zip_claims() -> None:

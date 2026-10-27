@@ -59,8 +59,8 @@ Reading a conversation in dark mode:
 - **Memory rendering.** Claude's conversation memory, its memory files (grouped by
   folder, metadata headers shown verbatim), and per-project memories, all with
   collapsible sections.
-- **Account page.** Your account details and, for current exports, your login history —
-  shown because it's your data.
+- **Account page.** Your account details and, whenever the export includes it, your login
+  history — shown because it's your data.
 - **Full-text search** (SQLite FTS5) across messages — including alternate branches — titles,
   summaries, projects, knowledge documents, and memory. Natural-language queries work as-is; a
   built-in syntax guide covers phrases, prefixes, proximity, and boolean operators. Results
@@ -121,14 +121,15 @@ Then open http://127.0.0.1:5000/.
 
 ## Getting your export
 
-In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open
-**Settings**, go to **Privacy**, and click **Export data**. Anthropic emails you a download
-link — it expires after 24 hours, so download promptly. Current exports arrive as a small
-manifest file whose links download up to four ZIP files (conversations, projects, memories,
-and account metadata); download them all and upload them to the viewer together, exactly as
-downloaded — there's no need to unzip anything. Older single-ZIP exports load exactly as
-before. The in-app **Help** page covers the rest, from what the export contains to backups
-and troubleshooting.
+In Claude (claude.ai or the desktop app), click your initials in the lower-left corner,
+open **Settings**, go to **Privacy**, and click **Export data**. Anthropic emails you a
+download link — it expires after 24 hours, so download promptly. Current exports arrive as
+a small manifest file listing several ZIP files (conversations, projects, memories, account
+metadata, and — if you use them — published artifacts and Claude Code scheduled tasks). The
+viewer's **Download links** page turns the manifest into one-click links. Download them all
+and upload them to the viewer together, exactly as downloaded — there's no need to unzip
+anything. Older single-ZIP exports load exactly as before. The in-app **Help** page covers
+the rest, from what the export contains to backups and troubleshooting.
 
 ## Development
 

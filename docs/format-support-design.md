@@ -45,9 +45,19 @@ The manifest's `export_url` values are live signed links. The viewer **never fet
 them** — the manifest is metadata for the banner (§4) and nothing more — and the help page
 carries a safety note telling users not to share or commit their manifest (Appendix, C2).
 
+Exception, ratified 2026-10: the manifest links page (docs/export-categories-design.md §8)
+displays the links to the user as https anchors their browser follows. The viewer itself
+still never fetches them, and the page stores nothing.
+
 Mixed submissions are refused by design. A load that combines a legacy archive with
 current-format category files raises a format error; the record defines no semantics for
 the mix because no real export produces one. The user-facing message is Appendix C11.
+
+Unrecognised files are skipped, not fatal. A submitted file that matches no signature and is
+not a manifest is skipped with a notice and never stored; the rest of the submission loads. A
+submission with no recognised file is refused as before. Ratified 2026-10 after the export
+gained three categories the v1.3.0 sniffer refused. New category signatures live in
+docs/export-categories-design.md §3.
 
 ## 3. Loading and assembly
 
@@ -96,6 +106,11 @@ the mix because no real export produces one. The user-facing message is Appendix
 - **Inspect mode** uses the same picker and detection, parses the set entirely in memory,
   and the no-trace property (zero disk artifacts, byte-identical `cache/` snapshots)
   extends to sets and remains test-pinned.
+
+The degraded-view banner counts the four core categories when no manifest is supplied; with
+a manifest it counts the manifest's distinct categories and names every missing one,
+including categories this version doesn't recognise. See docs/export-categories-design.md
+§4.
 
 ## 5. Storage, cache, and history
 

@@ -227,7 +227,8 @@
           <article class="search-group">
             <h3 class="search-group-title">
               <a href="{{ url_for('viewer.memory_view') }}#global-memory">
-                Conversation memory
+                {# D5: the summary is labelled legacy once memory files exist. #}
+                {% if legacy_memory %}Legacy memory{% else %}Conversation memory{% endif %}
               </a>
             </h3>
             <div class="search-snippet">{{ memory_global.hit.snippet | search_snippet }}</div>

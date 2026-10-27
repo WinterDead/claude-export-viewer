@@ -63,6 +63,39 @@ foreach ($c in $candidates) {
     $notes += "$($c.Label): Python $version - too old"
 }
 
+# The py launcher's default can be pinned to an older Python even when a newer
+# one is installed (v1.3.1, D13): before declaring "too old", probe its full
+# list and try each installed 3.x that meets the minimum by its versioned
+# qualifier (py -3.12, ...), newest first.
+if ($null -eq $python -and (Get-Command py -ErrorAction SilentlyContinue)) {
+    $listed = @()
+    try {
+        $listed = (& py -0p 2>$null | Out-String) -split "`n"
+    } catch {
+        $listed = @()
+    }
+    $qualifiers = @()
+    foreach ($line in $listed) {
+        if ($line -match '-(?:V:)?(\d+)\.(\d+)') {
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+            if ($major -gt $MinMajor -or ($major -eq $MinMajor -and $minor -ge $MinMinor)) {
+                $qualifiers += [pscustomobject]@{ Major = $major; Minor = $minor }
+            }
+        }
+    }
+    $qualifiers = $qualifiers | Sort-Object Major, Minor -Descending -Unique
+    foreach ($q in $qualifiers) {
+        $qualifier = "-$($q.Major).$($q.Minor)"
+        $version = Get-PythonVersion -Exe "py" -ExtraArgs @($qualifier)
+        if ($null -ne $version) {
+            $python = @{ Label = "py $qualifier (the Windows Python launcher)"; Exe = "py"; Args = @($qualifier) }
+            $pythonVersion = $version
+            break
+        }
+    }
+}
+
 if ($null -eq $python) {
     Write-Host ""
     Write-Host "Could not find Python $MinMajor.$MinMinor or newer on this machine."
@@ -73,6 +106,9 @@ if ($null -eq $python) {
     Write-Host "Next step: install Python 3.11 or newer from"
     Write-Host "  https://www.python.org/downloads/"
     Write-Host "During the install, tick 'Add Python to PATH', then run this script again."
+    if ($notes -match 'too old') {
+        Write-Host "If you've installed a newer Python and still see this, the py launcher may be pinned to an older version — run `"py -0p`" to list what's installed."
+    }
     exit 1
 }
 

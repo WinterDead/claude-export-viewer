@@ -51,6 +51,9 @@ class InspectState:
     # Expected-vs-supplied counts when the inspected set carried a manifest
     # (record §4's degraded-view banner) — ``None`` otherwise.
     manifest_status: tuple[int, int] | None = None
+    # The inspected manifest's distinct categories — the A7 banner's
+    # expected set (export-categories record §4); ``()`` without a manifest.
+    manifest_categories: tuple[str, ...] = ()
 
 
 def begin_inspection(
@@ -59,6 +62,7 @@ def begin_inspection(
     filename: str,
     *,
     manifest_status: tuple[int, int] | None = None,
+    manifest_categories: tuple[str, ...] = (),
 ) -> InspectState:
     """Enter inspect mode (replacing any inspection already in progress).
 
@@ -69,7 +73,11 @@ def begin_inspection(
     index_export(conn, export)
     end_inspection(app)
     state = InspectState(
-        export=export, filename=filename, search_conn=conn, manifest_status=manifest_status
+        export=export,
+        filename=filename,
+        search_conn=conn,
+        manifest_status=manifest_status,
+        manifest_categories=manifest_categories,
     )
     app.config[_CONFIG_KEY] = state
     return state

@@ -154,16 +154,21 @@ def test_memory_invalid_sort_falls_back_to_default(client) -> None:
     assert m
 
 
-def test_memory_global_first_regardless_of_sort(client) -> None:
-    """Global memory's <details> always appears before any project memory's,
-    no matter what sort is in effect."""
+def test_memory_global_position_holds_regardless_of_sort(client, export) -> None:
+    """Without memory files, the conversation memory's <details> precedes
+    every project memory; once the set has memory files the summary is
+    legacy and follows them (export-categories record §7) — under every
+    sort."""
     for sort in ("updated_desc", "name_asc", "created_desc"):
         body = client.get(f"/memory?sort={sort}").get_data(as_text=True)
         global_pos = body.find('id="global-memory"')
         project_pos = body.find('id="memory-00000000-0000-0000-0000-0000000000a1"')
         assert global_pos != -1
         assert project_pos != -1
-        assert global_pos < project_pos, f"global must precede project under sort={sort}"
+        if export.memory_files:
+            assert global_pos > project_pos, f"legacy memory must come last under sort={sort}"
+        else:
+            assert global_pos < project_pos, f"global must precede project under sort={sort}"
 
 
 def test_memory_name_asc_sort_param_active(client) -> None:

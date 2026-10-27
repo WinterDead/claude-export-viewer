@@ -121,3 +121,45 @@ def test_flask_cli_run_default_host_is_loopback() -> None:
 
     host = next(p for p in run_command.params if p.name == "host")
     assert host.default == "127.0.0.1"
+
+
+# ---------------------------------------------------------------------------
+# Launcher polish (v1.3.1, export-categories record §5.7, copy D13)
+# ---------------------------------------------------------------------------
+
+D13_POSIX = (
+    "(Python's own error message was hidden; run " '"python3 -m venv .venv" yourself to see it.)'
+)
+D13_WINDOWS = (
+    "If you've installed a newer Python and still see this, the py launcher may be "
+    'pinned to an older version — run "py -0p" to list what\'s installed.'
+)
+
+
+def test_run_sh_hides_raw_ensurepip_output() -> None:
+    body = (PROJECT_ROOT / "run.sh").read_text(encoding="utf-8")
+    assert '"$PYTHON" -m venv .venv >/dev/null 2>&1' in body
+    # The friendly message stays, now ending with the D13 sentence (shell
+    # escapes undone).
+    echoed = body.replace('\\"', '"')
+    assert D13_POSIX in echoed
+    assert echoed.index("sudo apt install python3-venv") < echoed.index(D13_POSIX)
+
+
+def test_run_ps1_probes_the_py_launcher_list_before_too_old() -> None:
+    body = (PROJECT_ROOT / "run.ps1").read_text(encoding="utf-8-sig")
+    probe = body.index("py -0p 2>$null")
+    verdict = body.index("Could not find Python $MinMajor.$MinMinor or newer")
+    assert probe < verdict
+    # Each listed version that meets the minimum is tried by qualifier.
+    assert 'Get-PythonVersion -Exe "py" -ExtraArgs @($qualifier)' in body
+
+
+def test_run_ps1_too_old_message_mentions_the_pin() -> None:
+    body = (PROJECT_ROOT / "run.ps1").read_text(encoding="utf-8-sig")
+    assert D13_WINDOWS in body.replace('`"', '"')
+
+
+def test_run_ps1_keeps_its_bom() -> None:
+    # Session J: the em-dashes must survive Windows PowerShell 5.1.
+    assert (PROJECT_ROOT / "run.ps1").read_bytes().startswith(b"\xef\xbb\xbf")

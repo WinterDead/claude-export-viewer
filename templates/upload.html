@@ -55,5 +55,8 @@
     export is stored under <code>cache/active_export/</code> and the parse
     cache at <code>cache/parsed_export.pkl</code>.
   </p>
+
+  {# Copy D7 (v1.3.1): the pointer to the manifest links page. #}
+  <p class="manifest-pointer">Only have the manifest file? <a href="{{ url_for('viewer.manifest_links_form') }}">Get your download links.</a></p>
 </section>
 {% endblock %}

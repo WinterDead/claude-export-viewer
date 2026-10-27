@@ -1738,6 +1738,55 @@ details.collapsible > summary {
   margin: 0.25rem 0 0;
 }
 
+/* Load notices (v1.3.1, A6): files the last Upload or Inspect skipped —
+   copy D1/D2, shown once. Same quiet colourway as the degraded banner. */
+.load-notice-banner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.5rem 1rem;
+  background: var(--banner-degraded-bg);
+  border-bottom: 1px solid var(--banner-degraded-border);
+  color: var(--banner-degraded-fg);
+  font-size: 0.92rem;
+}
+
+.load-notice-list {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+/* v1.3.1 page elements: the D4 note on Home, the legacy memory group (D5)
+   and its control, the manifest links page (D7), the document card (D6). */
+.kept-categories-note,
+.memory-legacy-note,
+.manifest-created {
+  color: var(--muted);
+}
+
+.memory-group-legacy > summary h2 {
+  display: inline;
+}
+
+.legacy-memory-form {
+  margin: 0 0 1rem;
+}
+
+.manifest-table {
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.manifest-table th,
+.manifest-table td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+}
+
+.block-document .block-card-meta {
+  color: var(--muted);
+}
+
 /* Inspect-mode banner (v1.2 Session K): the mode signal while a non-primary
    export is open. Third banner colour — blue, an active-state signal —
    deliberately distinct from the amber orphan advisory and the red
@@ -2023,6 +2072,8 @@ details.collapsible > summary {
   .orphan-banner,
   .load-error-banner,
   .inspect-banner,
+  .load-notice-banner,
+  .legacy-memory-form,
   .orphan-purge,
   .upload-form,
   .help-controls,

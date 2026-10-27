@@ -22,6 +22,7 @@ from viewer.cache import parser_module_hash, write_cache
 from viewer.parser import (
     ALL_CATEGORIES,
     CONTAINER_LEGACY,
+    KNOWN_CATEGORIES,
     Export,
     ExportFormatError,
     InjectedPromptBlock,
@@ -115,9 +116,10 @@ def test_full_set_loads_from_directory(current_export: Export) -> None:
     assert current_export.global_memory is not None
     assert current_export.global_memory.content.startswith("**Work context**")
     assert current_export.orphan_project_memories == []
-    assert current_export.categories == ALL_CATEGORIES
+    # v1.3.1: the three later categories are recognised, validated, kept.
+    assert current_export.categories == KNOWN_CATEGORIES
     # One source path per category zip; the manifest is metadata, not a source.
-    assert len(current_export.source_paths) == 4
+    assert len(current_export.source_paths) == 7
 
 
 def test_memory_files_parsed_from_dict_shape(current_export: Export) -> None:

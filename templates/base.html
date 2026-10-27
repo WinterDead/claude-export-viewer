@@ -106,18 +106,38 @@
     </aside>
   {% endif %}
 
+  {% with notices = get_flashed_messages(category_filter=["load-notice"]) %}
+    {% if notices %}
+      {# Files the last Upload or Inspect skipped (v1.3.1, A6): copy D1/D2,
+         shown once after the redirect. #}
+      <aside class="load-notice-banner" role="status">
+        <ul class="load-notice-list">
+          {% for notice in notices %}<li>{{ notice }}</li>{% endfor %}
+        </ul>
+      </aside>
+    {% endif %}
+  {% endwith %}
+
   {% if g_missing_categories %}
-    {# Degraded-view banner (v1.3.0, record §4): persistent whenever the
-       viewed set is missing categories. Copy is chat-authored, byte-exact
-       (record Appendix C1); each line stays on one line so the rendered
-       bytes match the authored sentences. #}
+    {# Degraded-view banner (v1.3.0, record §4; A7 since v1.3.1): persistent
+       whenever the viewed set is missing an expected category — the
+       manifest's categories when one was supplied, otherwise the four core
+       ones. Copy is chat-authored, byte-exact (Appendix C1, record D3);
+       each line stays on one line so the rendered bytes match. #}
     <aside class="degraded-banner" role="status">
-      <p class="degraded-banner-lead">Loaded {{ g_loaded_category_count }} of 4 export categories.</p>
+      <p class="degraded-banner-lead">Loaded {{ g_loaded_category_count }} of {{ g_expected_category_count }} export categories.</p>
       <ul class="degraded-banner-list">
-        {% if "conversations" in g_missing_categories %}<li>No conversations file — conversation browsing and search are empty.</li>{% endif %}
-        {% if "projects" in g_missing_categories %}<li>No projects file — project pages and project names are unavailable.</li>{% endif %}
-        {% if "memories" in g_missing_categories %}<li>No memories file — the Memory page is unavailable.</li>{% endif %}
-        {% if "light_metadata" in g_missing_categories %}<li>No account file — account details and login history are unavailable.</li>{% endif %}
+        {% for c in g_missing_categories %}
+          {% if c == "conversations" %}<li>No conversations file — conversation browsing and search are empty.</li>
+          {% elif c == "projects" %}<li>No projects file — project pages and project names are unavailable.</li>
+          {% elif c == "memories" %}<li>No memories file — the Memory page is unavailable.</li>
+          {% elif c == "light_metadata" %}<li>No account file — account details and login history are unavailable.</li>
+          {% elif c == "frames" %}<li>No frames file — published artifacts are unavailable.</li>
+          {% elif c == "artifact_data" %}<li>No artifact data file — data saved by published artifacts is unavailable.</li>
+          {% elif c == "claude_code_cloud" %}<li>No Claude Code cloud file — scheduled tasks and their run history are unavailable.</li>
+          {% else %}<li>No {{ c }} file — this version of the viewer doesn't use it yet.</li>
+          {% endif %}
+        {% endfor %}
       </ul>
       {% if g_manifest_status %}
         <p class="degraded-banner-manifest">The manifest lists {{ g_manifest_status[0] }} files; {{ g_manifest_status[1] }} were supplied.</p>

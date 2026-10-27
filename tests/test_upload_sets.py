@@ -23,6 +23,7 @@ from app import create_app
 from tests.conftest import SYNTHETIC_EXPORT, scrape_csrf
 from viewer import routes as routes_module
 from viewer.cache import set_fingerprint, zip_hash
+from viewer.parser import KNOWN_CATEGORIES
 from viewer.routes import _read_upload_cap_mb, summarise_set
 
 # ---------------------------------------------------------------------------
@@ -90,6 +91,10 @@ def current_files(fixtures_dir: Path) -> dict[str, Path]:
         "projects": current / "projects-000.zip",
         "memories": current / "memories-000.zip",
         "light_metadata": current / "light_metadata-000.zip",
+        # The three later categories (v1.3.1) — the full eight-file delivery.
+        "frames": current / "frames-000.zip",
+        "artifact_data": current / "artifact_data-000.zip",
+        "claude_code_cloud": current / "claude_code_cloud-000.zip",
         "manifest": manifest,
     }
 
@@ -137,7 +142,9 @@ def test_full_set_upload_stores_files_as_received(app_factory, current_files) ->
     export = flask_app.config["EXPORT"]
     assert len(export.conversations) == 4
     assert export.user is not None
-    assert len(export.categories) == 4
+    # All seven categories recognised and kept (the v1.3.1 regression fix:
+    # v1.3.0 refused this exact upload).
+    assert export.categories == KNOWN_CATEGORIES
 
     # No degraded banner for a complete set.
     home = client.get("/").get_data(as_text=True)
@@ -156,7 +163,10 @@ def test_full_set_upload_records_summary_row_with_fingerprint(
     assert len(rows) == 1
     source, filename, fingerprint = rows[0]
     assert source == "upload"
-    assert filename == "5 files: conversations, projects, memories, light_metadata, manifest"
+    assert filename == (
+        "8 files: conversations, projects, memories, light_metadata, frames, artifact_data, "
+        "claude_code_cloud, manifest"
+    )
     active_set: Path = flask_app.config["ACTIVE_SET_PATH"]
     assert fingerprint == set_fingerprint(sorted(active_set.iterdir()))
 
@@ -187,8 +197,9 @@ def test_manifest_mismatch_line_on_banner(app_factory, current_files) -> None:
     assert _post_files(client, "/upload", supplied).status_code == 302
 
     home = client.get("/").get_data(as_text=True)
-    assert "Loaded 1 of 4 export categories." in home
-    assert "The manifest lists 4 files; 1 were supplied." in home
+    # A7: with a manifest, the lead counts against its seven categories.
+    assert "Loaded 1 of 7 export categories." in home
+    assert "The manifest lists 7 files; 1 were supplied." in home
 
 
 def test_manifest_alone_is_rejected(app_factory, current_files) -> None:
@@ -463,7 +474,7 @@ def test_inspect_manifest_mismatch_line(app_factory, current_files) -> None:
     ]
     assert _post_files(client, "/inspect", supplied).status_code == 302
     home = client.get("/").get_data(as_text=True)
-    assert "The manifest lists 4 files; 1 were supplied." in home
+    assert "The manifest lists 7 files; 1 were supplied." in home
 
 
 # ---------------------------------------------------------------------------
@@ -495,7 +506,8 @@ def test_startup_picks_up_stored_set_and_dedups_on_fingerprint(
     assert len(rows) == 1
 
     # The stored manifest keeps feeding the expected-vs-supplied status.
-    assert relaunched.config["MANIFEST_STATUS"] == (4, 4)
+    assert relaunched.config["MANIFEST_STATUS"] == (7, 7)
+    assert set(relaunched.config["MANIFEST_CATEGORIES"]) == set(KNOWN_CATEGORIES)
 
 
 def test_startup_records_set_summary_after_external_change(
@@ -515,7 +527,10 @@ def test_startup_records_set_summary_after_external_change(
     assert len(rows) == 2
     source, filename, fingerprint = rows[1]
     assert source == "startup"
-    assert filename == "4 files: conversations, memories, light_metadata, manifest"
+    assert filename == (
+        "7 files: conversations, memories, light_metadata, frames, artifact_data, "
+        "claude_code_cloud, manifest"
+    )
     assert fingerprint == set_fingerprint(sorted(active_set.iterdir()))
     assert "projects" not in relaunched.config["EXPORT"].categories
 

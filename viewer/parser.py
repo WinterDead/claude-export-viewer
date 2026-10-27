@@ -49,21 +49,45 @@ ALL_CATEGORIES = (
     CATEGORY_MEMORIES,
     CATEGORY_LIGHT_METADATA,
 )
+# The four original categories are the **core** set (export-categories record
+# §4): without a manifest, the degraded-view banner counts against these.
+CORE_CATEGORIES = ALL_CATEGORIES
+
+# The categories exports gained after v1.3.0 (export-categories record §3).
+# v1.3.1 recognises, validates, and keeps them; v1.4.0 displays them.
+CATEGORY_FRAMES = "frames"
+CATEGORY_ARTIFACT_DATA = "artifact_data"
+CATEGORY_CLAUDE_CODE_CLOUD = "claude_code_cloud"
+LATER_CATEGORIES = (CATEGORY_FRAMES, CATEGORY_ARTIFACT_DATA, CATEGORY_CLAUDE_CODE_CLOUD)
+
+# Every category this version recognises, in banner and summary order.
+KNOWN_CATEGORIES = CORE_CATEGORIES + LATER_CATEGORIES
 
 # Content-block types the parser types; anything else is preserved as an
 # UnknownBlock. The real-data invariant tests assert no block of these types
 # ever reaches UnknownBlock.
 KNOWN_BLOCK_TYPES = frozenset(
-    {"text", "thinking", "tool_use", "tool_result", "injected_prompt_block"}
+    {"text", "thinking", "tool_use", "tool_result", "injected_prompt_block", "document"}
 )
 
 _LEGACY_TRIO = frozenset({"users.json", "memories.json", "conversations.json"})
 _PROJECT_MEMBER_RE = re.compile(r"projects/[^/]+\.json$")
 _MEMORY_MEMBER_RE = re.compile(r"memories/[^/]+\.json$")
+# Later-category signatures (export-categories record §3).
+_ARTIFACT_MEMBER_RE = re.compile(r"artifacts/[^/]+/.+")
+_ARTIFACT_DESCRIPTOR_RE = re.compile(r"artifacts/[^/]+/artifact\.json")
+_ARTIFACT_DATA_MEMBER_RE = re.compile(r"artifacts/[^/]+/data/[^/]+\.json")
+_CLAUDE_CODE_CLOUD_MEMBER_RE = re.compile(r"claude_code_cloud/.+")
 
 
 class ExportFormatError(Exception):
     """Raised when an export archive's structure is incompatible with this parser."""
+
+
+class CategoryStructureError(ExportFormatError):
+    """A file matched a later category's signature but its structure could
+    not be read (export-categories record §5.1). The routes skip the file
+    with the D2 notice instead of failing the set."""
 
 
 class MixedContainerError(ExportFormatError):
@@ -169,6 +193,21 @@ class InjectedPromptBlock:
     stop_timestamp: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class DocumentBlock:
+    """A document the user attached to their turn (export-categories record
+    §5.3, V18) — typed since v1.3.1, previously an UnknownBlock. The file
+    itself is never in the export; the block names it."""
+
+    file_uuid: str
+    # Occasionally absent in real exports; the renderers fall back to D6's
+    # "Untitled document".
+    title: str | None = None
+    flags: Any = None
+    start_timestamp: str | None = None
+    stop_timestamp: str | None = None
+
+
 # Preserve-and-flag slot for content-block types this parser doesn't know
 # (house rule — see CLAUDE.md). ``type`` is the raw type string from the
 # export (empty when the record carried none); ``raw`` is the whole block
@@ -186,7 +225,13 @@ class UnknownBlock:
 
 
 ContentBlock = (
-    TextBlock | ThinkingBlock | ToolUseBlock | ToolResultBlock | InjectedPromptBlock | UnknownBlock
+    TextBlock
+    | ThinkingBlock
+    | ToolUseBlock
+    | ToolResultBlock
+    | InjectedPromptBlock
+    | DocumentBlock
+    | UnknownBlock
 )
 
 
@@ -332,10 +377,10 @@ class Export:
     source_paths: list[str]
     memory_files: list[MemoryFile] = field(default_factory=list)
     login_events: list[LoginEvent] = field(default_factory=list)
-    # Which of the four categories the loaded set supplied, in
-    # ``ALL_CATEGORIES`` order — drives the degraded-view banner. A legacy
-    # archive carries all four (its login-history section is empty by
-    # format, not by omission).
+    # Which categories the loaded set supplied, in ``KNOWN_CATEGORIES``
+    # order — drives the degraded-view banner. A legacy archive carries the
+    # four core categories (its login history is empty by format unless the
+    # archive carries a root login_history.json, V21).
     categories: tuple[str, ...] = ALL_CATEGORIES
 
 
@@ -372,16 +417,21 @@ def load_export(source: str | Path | Sequence[str | Path]) -> Export:
     paths = _resolve_paths(source)
 
     kinds = {p: _sniff_zip_path(p) for p in paths}
-    current = [p for p in paths if kinds[p] in ALL_CATEGORIES]
+    current = [p for p in paths if kinds[p] in KNOWN_CATEGORIES]
     if current:
-        others = [p for p in paths if kinds[p] not in ALL_CATEGORIES]
-        if others:
+        legacy = [p for p in paths if kinds[p] == CONTAINER_LEGACY]
+        if legacy:
             raise MixedContainerError(
                 "cannot mix current-format category archives with other archives "
-                f"in one load: {', '.join(p.name for p in others)}"
+                f"in one load: {', '.join(p.name for p in legacy)}"
             )
-        parts = []
+        # A6: beside category files, an unrecognised ZIP is skipped, not
+        # fatal (the routes show D1; a stored set never holds one).
         for p in paths:
+            if kinds[p] is None:
+                logger.warning("skipped unrecognised file in an export set: %s", p.name)
+        parts = []
+        for p in current:
             zf, _names = _open_zip(p)
             parts.append((kinds[p], zf, str(p), p.name))
         return _load_current_set(parts)
@@ -412,7 +462,7 @@ def load_export_from_bytes(data: bytes, *, name: str) -> Export:
     except zipfile.BadZipFile as e:
         raise ExportFormatError(f"not a valid zip archive: {name} ({e})") from e
     kind = sniff_container(set(zf_ctx.namelist()))
-    if kind in ALL_CATEGORIES:
+    if kind in KNOWN_CATEGORIES:
         return _load_current_set([(kind, zf_ctx, name, name)])
     return _parse_zip(zf_ctx, source_name=name)
 
@@ -436,14 +486,19 @@ def load_export_from_bytes_set(files: Sequence[tuple[str, bytes]]) -> Export:
             raise ExportFormatError(f"not a valid zip archive: {name} ({e})") from e
         parts.append((sniff_container(set(zf.namelist())), zf, name))
 
-    if any(kind in ALL_CATEGORIES for kind, _zf, _name in parts):
-        others = [name for kind, _zf, name in parts if kind not in ALL_CATEGORIES]
-        if others:
+    if any(kind in KNOWN_CATEGORIES for kind, _zf, _name in parts):
+        legacy = [name for kind, _zf, name in parts if kind == CONTAINER_LEGACY]
+        if legacy:
             raise MixedContainerError(
                 "cannot mix current-format category archives with other archives "
-                f"in one load: {', '.join(others)}"
+                f"in one load: {', '.join(legacy)}"
             )
-        return _load_current_set([(kind, zf, name, name) for kind, zf, name in parts])
+        for kind, _zf, name in parts:
+            if kind is None:
+                logger.warning("skipped unrecognised file in an export set: %s", name)
+        return _load_current_set(
+            [(kind, zf, name, name) for kind, zf, name in parts if kind in KNOWN_CATEGORIES]
+        )
 
     if len(parts) == 1:
         _kind, zf, name = parts[0]
@@ -480,7 +535,7 @@ def _resolve_paths(source: str | Path | Sequence[str | Path]) -> list[Path]:
 def sniff_container(names: set[str]) -> str | None:
     """Identify a zip's container kind from its member names.
 
-    Returns :data:`CONTAINER_LEGACY`, one of :data:`ALL_CATEGORIES`, or
+    Returns :data:`CONTAINER_LEGACY`, one of :data:`KNOWN_CATEGORIES`, or
     ``None`` when the layout matches neither format. The current-category
     signatures are strict (record §2's table) so that a damaged legacy
     archive falls through to the legacy pipeline and gets its precise
@@ -500,7 +555,53 @@ def sniff_container(names: set[str]) -> str | None:
             return CATEGORY_PROJECTS
         if all(_MEMORY_MEMBER_RE.fullmatch(n) for n in files):
             return CATEGORY_MEMORIES
+        # Later categories (export-categories record §3). artifact_data is
+        # tested first: its members also sit under artifacts/<id>/, but it
+        # never carries a descriptor, which frames requires.
+        if all(_ARTIFACT_DATA_MEMBER_RE.fullmatch(n) for n in files):
+            return CATEGORY_ARTIFACT_DATA
+        if all(_ARTIFACT_MEMBER_RE.fullmatch(n) for n in files) and any(
+            _ARTIFACT_DESCRIPTOR_RE.fullmatch(n) for n in files
+        ):
+            return CATEGORY_FRAMES
+        if all(_CLAUDE_CODE_CLOUD_MEMBER_RE.fullmatch(n) for n in files):
+            return CATEGORY_CLAUDE_CODE_CLOUD
     return None
+
+
+def validate_category_zip(category: str, zf: zipfile.ZipFile) -> None:
+    """Structural validation for the later categories (export-categories
+    record §5.1): parse far enough to know the file can be read.
+
+    Raises :class:`CategoryStructureError` naming nothing but the category;
+    the routes skip the file with the D2 notice. Per-artifact surprises
+    (missing files, hash mismatches, unreadable comments) are not structural —
+    they are preserved and flagged when the category is displayed.
+    """
+    if category not in LATER_CATEGORIES:
+        return
+    names = [n for n in zf.namelist() if not n.endswith("/")]
+    if category == CATEGORY_FRAMES:
+        targets = [n for n in names if _ARTIFACT_DESCRIPTOR_RE.fullmatch(n)]
+        key = None
+    elif category == CATEGORY_ARTIFACT_DATA:
+        targets = names
+        key = "documents"
+    else:
+        targets = [n for n in names if n.endswith(".json")]
+        key = "claude_code_cloud"
+    if not targets:
+        raise CategoryStructureError(f"{category} file has nothing to read")
+    for name in targets:
+        try:
+            with zf.open(name) as fh:
+                payload = json.load(fh)
+        except (ValueError, UnicodeDecodeError, zipfile.BadZipFile, OSError) as e:
+            raise CategoryStructureError(f"{category} member is not readable JSON") from e
+        if not isinstance(payload, dict):
+            raise CategoryStructureError(f"{category} member is not a JSON object")
+        if key is not None and not isinstance(payload.get(key), list):
+            raise CategoryStructureError(f"{category} member has no {key} list")
 
 
 def sniff_manifest(data: bytes) -> bool:
@@ -527,6 +628,67 @@ def manifest_file_count(data: bytes) -> int | None:
         return None
     data_files = parsed.get("data_files")
     return len(data_files) if isinstance(data_files, list) else None
+
+
+def manifest_categories(data: bytes) -> tuple[str, ...]:
+    """The manifest's distinct ``category`` values in listed order — the
+    expected categories for the degraded-view banner (export-categories
+    record §4, A7). Empty when ``data`` is not a manifest."""
+    try:
+        parsed = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return ()
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data_files"), list):
+        return ()
+    seen: list[str] = []
+    for entry in parsed["data_files"]:
+        category = entry.get("category") if isinstance(entry, dict) else None
+        if isinstance(category, str) and category and category not in seen:
+            seen.append(category)
+    return tuple(seen)
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestLink:
+    """One listed data file for the manifest links page (export-categories
+    record §8). ``url`` is the raw ``export_url`` — displayed, never fetched."""
+
+    filename: str
+    category: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class ManifestLinks:
+    created_at: datetime | None
+    files: list[ManifestLink]
+
+
+def manifest_links(data: bytes) -> ManifestLinks | None:
+    """Read a manifest's file list for display, entirely in memory — or
+    ``None`` when ``data`` is not a manifest. The links are live signed
+    downloads: the viewer shows them to the user and never dereferences
+    them (record §8, amendment A8)."""
+    try:
+        parsed = json.loads(data)
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data_files"), list):
+        return None
+    created_raw = parsed.get("created_at")
+    created = _parse_dt(created_raw) if isinstance(created_raw, str) and created_raw else None
+    files = []
+    for entry in parsed["data_files"]:
+        if not isinstance(entry, dict):
+            continue
+        files.append(
+            ManifestLink(
+                filename=str(entry.get("filename") or ""),
+                category=str(entry.get("category") or ""),
+                url=str(entry.get("export_url") or ""),
+            )
+        )
+    return ManifestLinks(created_at=created, files=files)
 
 
 def manifest_part_map(data: bytes) -> dict[str, int]:
@@ -613,6 +775,24 @@ def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Exp
         for category, cat_parts in by_category.items():
             _warn_if_parts_incomplete(category, [display for _, _, display in cat_parts])
 
+        # Later categories (export-categories record §5.1): kept, counted,
+        # validated — not yet displayed. A part that fails validation is
+        # skipped with a WARNING rather than failing the set (the routes
+        # validate first and show D2; this guards stored sets).
+        for category in LATER_CATEGORIES:
+            kept = []
+            for zf, src, display in by_category.get(category, []):
+                try:
+                    validate_category_zip(category, zf)
+                except CategoryStructureError:
+                    logger.warning("skipped unreadable %s file: %s", category, display)
+                    continue
+                kept.append((zf, src, display))
+            if kept:
+                by_category[category] = kept
+            else:
+                by_category.pop(category, None)
+
         user: User | None = None
         login_events: list[LoginEvent] = []
         for zf, _src, _display in by_category.get(CATEGORY_LIGHT_METADATA, []):
@@ -696,7 +876,7 @@ def _load_current_set(parts: list[tuple[str, zipfile.ZipFile, str, str]]) -> Exp
         source_paths=source_paths,
         memory_files=memory_files,
         login_events=login_events,
-        categories=tuple(c for c in ALL_CATEGORIES if c in by_category),
+        categories=tuple(c for c in KNOWN_CATEGORIES if c in by_category),
     )
 
 
@@ -813,6 +993,9 @@ def _parse_zip(zf_ctx: zipfile.ZipFile, *, source_name: str) -> Export:
 
         projects, orphan_memories = _load_projects(zf, project_memories_by_uuid)
         conversations = _load_conversations(zf, user.uuid)
+        # Later legacy archives carry the current format's login history at
+        # the root (export-categories record §5.4, V21) — same model slot.
+        login_events = _load_login_history(zf) if "login_history.json" in names else []
 
     return Export(
         user=user,
@@ -822,6 +1005,7 @@ def _parse_zip(zf_ctx: zipfile.ZipFile, *, source_name: str) -> Export:
         orphan_project_memories=orphan_memories,
         source_paths=[source_name],
         memory_files=memory_files,
+        login_events=login_events,
     )
 
 
@@ -1121,6 +1305,16 @@ def _parse_content_block(raw: dict[str, Any], seen_warnings: set[str]) -> Conten
             prompt=raw.get("prompt", "") or "",
             initial_turn_only=bool(raw.get("initial_turn_only")),
             skip_on_truncated_continuation=bool(raw.get("skip_on_truncated_continuation")),
+            start_timestamp=raw.get("start_timestamp"),
+            stop_timestamp=raw.get("stop_timestamp"),
+        )
+
+    if block_type == "document":
+        title = raw.get("title")
+        return DocumentBlock(
+            file_uuid=str(raw.get("file_uuid") or ""),
+            title=title if isinstance(title, str) and title else None,
+            flags=raw.get("flags"),
             start_timestamp=raw.get("start_timestamp"),
             stop_timestamp=raw.get("stop_timestamp"),
         )

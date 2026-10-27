@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+
+{% block title %}Download links — Claude Export Viewer{% endblock %}
+
+{% block content %}
+<section class="manifest-page">
+  <header class="page-header">
+    {# Copy D7 (v1.3.1, export-categories record §8), byte-exact. #}
+    <h1>Download links</h1>
+    <p class="lede">Open the manifest file from your export email to see its download links. Download each file, then upload them all together on the <a href="{{ url_for('viewer.upload_form') }}">Upload</a> page.</p>
+  </header>
+
+  {% if error %}
+    <p class="warn">{{ error }}</p>
+  {% endif %}
+
+  <form method="post"
+        action="{{ url_for('viewer.manifest_links_show') }}"
+        enctype="multipart/form-data"
+        class="upload-form manifest-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="upload-form-label" for="manifest-file">
+      <span class="upload-form-text">Manifest file</span>
+      <input id="manifest-file"
+             type="file"
+             name="manifest_file"
+             accept=".json,application/json"
+             required>
+    </label>
+    <button type="submit" class="upload-submit">Show download links</button>
+  </form>
+
+  {% if links %}
+    {% if links.created_at %}
+      <p class="manifest-created">Export created {{ links.created_at | format_local }}.</p>
+    {% endif %}
+    <p class="warn manifest-warning">These links are personal and expire about 24 hours after the export was created. Don't share them. The viewer doesn't download anything itself and doesn't keep your manifest.</p>
+    <table class="manifest-table">
+      <thead>
+        <tr><th>File</th><th>Category</th><th>Download</th></tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><code>{{ row.filename }}</code></td>
+            <td>{{ row.category }}</td>
+            <td>
+              {# Anchors only for https (record §8); the browser follows a
+                 link when clicked — the viewer never fetches one (A8). #}
+              {% if row.url %}<a href="{{ row.url }}" rel="noopener noreferrer">Download</a>{% else %}(link not shown){% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

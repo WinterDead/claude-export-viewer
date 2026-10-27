@@ -20,12 +20,14 @@ import shutil
 import zipfile
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from flask import (
     Blueprint,
     Response,
     abort,
     current_app,
+    flash,
     redirect,
     render_template,
     request,
@@ -44,9 +46,11 @@ from viewer.export import (
 from viewer.history import all_history, record_load
 from viewer.inspect import begin_inspection, end_inspection, get_inspection
 from viewer.parser import (
-    ALL_CATEGORIES,
     CONTAINER_LEGACY,
+    KNOWN_CATEGORIES,
+    LATER_CATEGORIES,
     MIXED_CONTAINER_MESSAGE,
+    CategoryStructureError,
     Conversation,
     Export,
     ExportFormatError,
@@ -54,10 +58,13 @@ from viewer.parser import (
     Project,
     load_export,
     load_export_from_bytes_set,
+    manifest_categories,
     manifest_file_count,
+    manifest_links,
     manifest_part_map,
     sniff_container,
     sniff_manifest,
+    validate_category_zip,
 )
 from viewer.render import (
     compute_render_path,
@@ -108,6 +115,23 @@ HELP_CONTENT_PATH = Path(__file__).resolve().parent / "content" / "help.md"
 THEMES: tuple[str, ...] = ("system", "light", "dark")
 THEME_COOKIE = "viewer_theme"
 THEME_COOKIE_MAX_AGE = 365 * 24 * 60 * 60  # a year is fine
+
+# Hide legacy memory (v1.3.1, export-categories record §7): off by default;
+# persisted the same way as the theme, disclosed in help ("Appearance").
+LEGACY_MEMORY_COOKIE = "viewer_legacy_memory"
+LEGACY_MEMORY_HIDE = "hide"
+
+# Copy D1 and D2 (export-categories record appendix): the notices for files
+# an Upload or Inspect submission skipped. Shown once, after the redirect.
+SKIPPED_FILE_NOTICE = (
+    "{filename} isn't a file this version of the viewer recognises, so it was skipped. "
+    "The rest of your export loaded."
+)
+INVALID_CATEGORY_NOTICE = (
+    "{filename} looks like a {category} file but couldn't be read, so it was skipped. "
+    "The rest of your export loaded."
+)
+LOAD_NOTICE_CATEGORY = "load-notice"
 
 
 # ---------------------------------------------------------------------------
@@ -176,6 +200,25 @@ def _refuse_while_inspecting() -> None:
         abort(403, "Read-only while inspecting an export. Return to your own export first.")
 
 
+def legacy_memory_state(export: Export) -> bool:
+    """True when the conversation-memory summary is **legacy** (record §7):
+    the set contains one or more memory files. Triggered by the data, never
+    by dates."""
+    return bool(export.memory_files) and export.global_memory is not None
+
+
+def legacy_memory_hidden(export: Export) -> bool:
+    """Whether the legacy memory group and its search hits are hidden: the
+    hide setting is on **and** the viewed set is in the legacy state. Inspect
+    mode ignores the setting (record §7) — an inspected export never hides
+    its summary."""
+    if get_inspection(current_app) is not None:
+        return False
+    if request.cookies.get(LEGACY_MEMORY_COOKIE) != LEGACY_MEMORY_HIDE:
+        return False
+    return legacy_memory_state(export)
+
+
 # ---------------------------------------------------------------------------
 # Home
 # ---------------------------------------------------------------------------
@@ -206,6 +249,8 @@ def index() -> str:
         project_memories=project_memories,
         orphan_memories=len(export.orphan_project_memories),
         global_memory_block=global_memory_block,
+        # D4 (v1.3.1): said when the loaded set carries any later category.
+        kept_categories=any(c in export.categories for c in LATER_CATEGORIES),
     )
 
 
@@ -613,15 +658,41 @@ def memory_view() -> str:
             )
         )
 
+    legacy = legacy_memory_state(export)
+    hidden = legacy_memory_hidden(export)
     return render_template(
         "memory.html",
-        conversation_memory=conversation_memory,
+        conversation_memory=None if hidden else conversation_memory,
         memory_file_groups=memory_file_groups,
         memory_file_count=len(export.memory_files),
         memories=memories,
         orphans=orphans,
         sort=sort,
+        legacy_memory=legacy,
+        legacy_memory_hidden=hidden,
+        # The control renders only in the legacy state of the primary
+        # export — never while inspecting (record §7).
+        show_legacy_control=legacy and get_inspection(current_app) is None,
     )
+
+
+@bp.route("/memory/legacy", methods=["POST"])
+def legacy_memory_set():
+    """The Memory page's ``Hide legacy memory`` control (v1.3.1, record §7).
+    Stores the choice in the ``viewer_legacy_memory`` cookie and returns to
+    the Memory page. Display preference only: the export, the index, and the
+    tags are untouched, so it is not refused while inspecting — but the
+    control never renders there and inspect mode ignores the cookie."""
+    hide = request.form.get("hide_legacy_memory") == "1"
+    resp = redirect(url_for("viewer.memory_view"))
+    resp.set_cookie(
+        LEGACY_MEMORY_COOKIE,
+        LEGACY_MEMORY_HIDE if hide else "show",
+        max_age=THEME_COOKIE_MAX_AGE,
+        samesite="Lax",
+        httponly=True,
+    )
+    return resp
 
 
 def _memory_block(
@@ -733,6 +804,11 @@ def search_view() -> str:
     conv_groups, project_groups, memory_global, memory_files, memory_orphans = _group_search_hits(
         results.hits, export
     )
+    # Record §7: in the legacy state the summary's hit carries the D5 label,
+    # and the hide setting removes it (display only — the index and the
+    # result count are unchanged).
+    if legacy_memory_hidden(export):
+        memory_global = None
 
     return render_template(
         "search.html",
@@ -744,6 +820,7 @@ def search_view() -> str:
         memory_files=memory_files,
         memory_orphans=memory_orphans,
         result_limit=SEARCH_RESULT_LIMIT,
+        legacy_memory=legacy_memory_state(export),
     )
 
 
@@ -931,7 +1008,7 @@ def summarise_set(slotted: dict[str, list[str]]) -> str:
     light_metadata``."""
     if set(slotted) == {CONTAINER_LEGACY} and len(slotted[CONTAINER_LEGACY]) == 1:
         return slotted[CONTAINER_LEGACY][0]
-    order = [*ALL_CATEGORIES, CONTAINER_LEGACY, _MANIFEST_KIND]
+    order = [*KNOWN_CATEGORIES, CONTAINER_LEGACY, _MANIFEST_KIND]
     parts: list[str] = []
     total = 0
     for k in order:
@@ -993,6 +1070,9 @@ def upload_post():
 
     try:
         slotted: dict[str, list[tuple[Path, str]]] = {}
+        notices: list[str] = []
+        unrecognised: list[str] = []
+        unreadable: list[str] = []
         for f in files:
             basename = Path(f.filename).name
             dest = stage / basename
@@ -1007,8 +1087,21 @@ def upload_post():
 
             kind = _sniff_staged_file(dest, basename)
             if kind is None:
-                return _upload_error(f"{basename} isn't a recognised export file.")
+                # A6: skipped, never stored; the rest of the submission loads.
+                dest.unlink(missing_ok=True)
+                unrecognised.append(basename)
+                notices.append(SKIPPED_FILE_NOTICE.format(filename=basename))
+                continue
+            if kind in LATER_CATEGORIES and not _staged_category_valid(dest, kind):
+                dest.unlink(missing_ok=True)
+                unreadable.append(basename)
+                notices.append(INVALID_CATEGORY_NOTICE.format(filename=basename, category=kind))
+                continue
             slotted.setdefault(kind, []).append((dest, basename))
+
+        if not slotted and unrecognised:
+            # No file in the submission is recognised: the existing error stands.
+            return _upload_error(f"{unrecognised[0]} isn't a recognised export file.")
 
         # Same-category files: distinguishable parts merge in part order
         # through the loader's §3 multi-part merge; otherwise last file
@@ -1037,9 +1130,14 @@ def upload_post():
             slotted[kind] = [last]
 
         zip_paths = [
-            p for kind in (*ALL_CATEGORIES, CONTAINER_LEGACY) for p, _n in slotted.get(kind, [])
+            p for kind in (*KNOWN_CATEGORIES, CONTAINER_LEGACY) for p, _n in slotted.get(kind, [])
         ]
         if not zip_paths:
+            if _MANIFEST_KIND not in slotted:
+                # Only unreadable category files were supplied — nothing
+                # loaded, so D2's "the rest loaded" would be untrue; the
+                # existing parse-error form says what happened instead.
+                return _upload_error(f"Couldn't parse archive: {unreadable[0]} couldn't be read.")
             return _upload_error(
                 "The manifest alone doesn't contain your data — include the export "
                 ".zip files as well."
@@ -1083,6 +1181,9 @@ def upload_post():
     index_export(db, new_export)
     current_app.config["EXPORT"] = new_export
     current_app.config["MANIFEST_STATUS"] = manifest_status_for_set(active_set)
+    current_app.config["MANIFEST_CATEGORIES"] = manifest_categories_for_set(active_set)
+    for notice in notices:
+        flash(notice, LOAD_NOTICE_CATEGORY)
     # A successful upload replaced the stored set, so the graceful-startup
     # banner condition clears with it (v1.1.5 Session I).
     current_app.config["STORED_EXPORT_FAILED"] = False
@@ -1101,6 +1202,39 @@ def upload_post():
     )
 
     return redirect(url_for("viewer.index"))
+
+
+def _staged_category_valid(path: Path, category: str) -> bool:
+    """Structural validation of a staged later-category file (record §5.1)."""
+    try:
+        with zipfile.ZipFile(path) as zf:
+            validate_category_zip(category, zf)
+    except (CategoryStructureError, zipfile.BadZipFile):
+        return False
+    return True
+
+
+def _bytes_category_valid(data: bytes, category: str) -> bool:
+    """In-memory twin of :func:`_staged_category_valid` for Inspect."""
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            validate_category_zip(category, zf)
+    except (CategoryStructureError, zipfile.BadZipFile):
+        return False
+    return True
+
+
+def manifest_categories_for_set(set_dir: Path) -> tuple[str, ...]:
+    """The stored manifest's distinct categories — the A7 banner's expected
+    set — or ``()`` when the set carries no manifest."""
+    if not set_dir.is_dir():
+        return ()
+    for p in sorted(set_dir.iterdir()):
+        if p.is_file() and p.suffix.lower() == ".json":
+            found = manifest_categories(p.read_bytes())
+            if found:
+                return found
+    return ()
 
 
 def manifest_status_for_set(set_dir: Path) -> tuple[int, int] | None:
@@ -1160,6 +1294,9 @@ def inspect_post():
             return _inspect_error("Files must be .zip archives or a manifest .json.")
 
     slotted: dict[str, list[tuple[str, bytes]]] = {}
+    notices: list[str] = []
+    unrecognised: list[str] = []
+    unreadable: list[str] = []
     for f in files:
         basename = Path(f.filename).name
         data = f.stream.read(UPLOAD_MAX_BYTES + 1)
@@ -1176,8 +1313,18 @@ def inspect_post():
             except zipfile.BadZipFile:
                 kind = None
         if kind is None:
-            return _inspect_error(f"{basename} isn't a recognised export file.")
+            # A6, same rule as Upload: skipped with D1, the rest loads.
+            unrecognised.append(basename)
+            notices.append(SKIPPED_FILE_NOTICE.format(filename=basename))
+            continue
+        if kind in LATER_CATEGORIES and not _bytes_category_valid(data, kind):
+            unreadable.append(basename)
+            notices.append(INVALID_CATEGORY_NOTICE.format(filename=basename, category=kind))
+            continue
         slotted.setdefault(kind, []).append((basename, data))
+
+    if not slotted and unrecognised:
+        return _inspect_error(f"{unrecognised[0]} isn't a recognised export file.")
 
     # Same rules as Upload (record §4): distinguishable parts keep their
     # part order for the loader's merge; otherwise last file wins.
@@ -1204,10 +1351,12 @@ def inspect_post():
 
     zips = [
         (name, data)
-        for kind in (*ALL_CATEGORIES, CONTAINER_LEGACY)
+        for kind in (*KNOWN_CATEGORIES, CONTAINER_LEGACY)
         for name, data in slotted.get(kind, [])
     ]
     if not zips:
+        if _MANIFEST_KIND not in slotted:
+            return _inspect_error(f"Couldn't parse archive: {unreadable[0]} couldn't be read.")
         return _inspect_error(
             "The manifest alone doesn't contain your data — include the export "
             ".zip files as well."
@@ -1221,14 +1370,67 @@ def inspect_post():
         return _inspect_error(f"Couldn't parse archive: {e}")
 
     manifest_status: tuple[int, int] | None = None
+    expected_categories: tuple[str, ...] = ()
     if _MANIFEST_KIND in slotted:
         m = manifest_file_count(slotted[_MANIFEST_KIND][-1][1])
         if m is not None:
             manifest_status = (m, len(zips))
+        expected_categories = manifest_categories(slotted[_MANIFEST_KIND][-1][1])
 
     display = summarise_set({kind: [n for n, _d in entries] for kind, entries in slotted.items()})
-    begin_inspection(current_app, export, display, manifest_status=manifest_status)
+    begin_inspection(
+        current_app,
+        export,
+        display,
+        manifest_status=manifest_status,
+        manifest_categories=expected_categories,
+    )
+    for notice in notices:
+        flash(notice, LOAD_NOTICE_CATEGORY)
     return redirect(url_for("viewer.index"))
+
+
+# ---------------------------------------------------------------------------
+# Manifest links page (v1.3.1, export-categories record §8, copy D7)
+# ---------------------------------------------------------------------------
+
+# Copy D7's error for anything that isn't a manifest.
+MANIFEST_PAGE_ERROR = "That file isn't an export manifest."
+
+
+def _https_url(url: str) -> bool:
+    """Links render as anchors only for https URLs with a host (record §8)."""
+    parts = urlsplit(url)
+    return parts.scheme == "https" and bool(parts.netloc)
+
+
+@bp.route("/manifest", methods=["GET"])
+def manifest_links_form() -> str:
+    return render_template("manifest.html", error=None, links=None)
+
+
+@bp.route("/manifest", methods=["POST"])
+def manifest_links_show() -> str:
+    """Show a manifest's download links. The manifest is parsed in memory and
+    never stored — no set write, no history row, no cache change (the inspect
+    no-trace rule, applied); the browser follows a link only when the user
+    clicks it, and the viewer never fetches one (amendment A8)."""
+    f = request.files.get("manifest_file")
+    if f is None or not f.filename:
+        return render_template("manifest.html", error=MANIFEST_PAGE_ERROR, links=None), 400
+    data = f.stream.read(UPLOAD_MAX_BYTES + 1)
+    links = manifest_links(data) if len(data) <= UPLOAD_MAX_BYTES else None
+    if links is None:
+        return render_template("manifest.html", error=MANIFEST_PAGE_ERROR, links=None), 400
+    rows = [
+        {
+            "filename": link.filename,
+            "category": link.category,
+            "url": link.url if _https_url(link.url) else None,
+        }
+        for link in links.files
+    ]
+    return render_template("manifest.html", error=None, links=links, rows=rows)
 
 
 @bp.route("/theme", methods=["POST"])

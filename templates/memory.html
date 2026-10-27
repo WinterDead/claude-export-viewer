@@ -17,9 +17,25 @@
     <p class="empty">No memory recorded in this archive.</p>
   {% endif %}
 
+  {% if show_legacy_control %}
+    {# Hide legacy memory (v1.3.1, export-categories record §7): off by
+       default, a cookie-persisted display choice; rendered only when the
+       primary export is in the legacy state, never while inspecting. #}
+    <form method="post" action="{{ url_for('viewer.legacy_memory_set') }}" class="legacy-memory-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label class="legacy-memory-label">
+        <input type="checkbox" name="hide_legacy_memory" value="1"{% if legacy_memory_hidden %} checked{% endif %} onchange="this.form.submit()">
+        Hide legacy memory
+      </label>
+      <input type="hidden" name="hide_legacy_memory" value="0">
+      <noscript><button type="submit" class="legacy-memory-submit">Save</button></noscript>
+    </form>
+  {% endif %}
+
   {# Record §7 group 1 — the opaque conversation-memory blob. Heading is
-     Appendix C7 copy. #}
-  {% if conversation_memory %}
+     Appendix C7 copy. Once the set has memory files the summary is legacy
+     and moves to the end instead (export-categories record §7). #}
+  {% if conversation_memory and not legacy_memory %}
     <section class="memory-group">
       <h2>Conversation memory</h2>
       <div class="memory-list">
@@ -111,6 +127,18 @@
         </section>
       {% endif %}
     </section>
+  {% endif %}
+
+  {% if conversation_memory and legacy_memory %}
+    {# Legacy memory (v1.3.1, export-categories record §7, copy D5): last,
+       collapsed by default, headed and annotated as no longer updated. #}
+    <details class="memory-group memory-group-legacy" id="legacy-memory">
+      <summary class="memory-group-legacy-summary"><h2>Legacy memory (no longer updated)</h2></summary>
+      <p class="memory-legacy-note">This is the summary from Claude's previous memory system. It stopped updating when your account moved to memory files, so it may not match them.</p>
+      <div class="memory-list">
+        {{ memory_block(conversation_memory) }}
+      </div>
+    </details>
   {% endif %}
 </section>
 {% endblock %}

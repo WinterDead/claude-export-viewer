@@ -654,6 +654,33 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
 - **A5 — display-content bodies collapse by size** (phase 2): `DISPLAY_BODY_COLLAPSE_LINES
   = 30`, `DISPLAY_BODY_COLLAPSE_CHARS = 2000` in `viewer/render.py`; teaser copy U1 from the
   block's own `message` line (now preserved on tool blocks) or its tool name.
+- **Importing `app` builds no app** (phase 2): the module-level instance is gone; `flask
+  --app app run` discovers the `create_app` factory, so test imports never parse or index
+  the stored export under `cache/`.
+- **v1.3.1 — current exports load again** (phase 3; bump commit `v1.3.1:`; release notes
+  `docs/briefs/v1.3.1-release-notes.md`). Locked:
+  - Detection: `frames`, `artifact_data`, `claude_code_cloud` signatures (record §3);
+    `KNOWN_CATEGORIES` = the four core plus the three later ones. A6: unrecognised files
+    are skipped with D1 on Upload and Inspect (never stored); a later-category file that
+    fails structural validation is skipped with D2; a submission with no recognised file
+    errors as before; legacy + current still refused. The path loader skips an
+    unrecognised ZIP beside category ZIPs with a WARNING.
+  - A7 banner: with a manifest, expected categories are its distinct categories (lead
+    counts against that number; D3 lines for the later categories; unknown names by raw
+    name); without one, only the four core categories count.
+  - Later categories are validated, kept, counted, and fingerprinted, not displayed (D4 on
+    Home when present, and in Help).
+  - `DocumentBlock` typed (D6 card and export line); legacy `login_history.json` loads into
+    the same model slot.
+  - Legacy memory (record §7): legacy whenever memory files are present; groups ordered
+    Memory files, Project memories, Legacy memory (collapsed, D5); search label D5; the
+    `viewer_legacy_memory` cookie (HttpOnly, a year) hides the group and its search hit in
+    the legacy state only; Inspect ignores it and renders no control.
+  - `/manifest` (D7): parsed in memory, nothing stored (snapshot-pinned); anchors only for
+    `https` with a host, `rel="noopener noreferrer"`; linked from Upload and Help.
+  - Launchers (D13): POSIX venv output suppressed with the pointer sentence; Windows probes
+    `py -0p` and versioned qualifiers before "too old", and the message mentions the pin.
+  - Amendments A5–A8 applied to `docs/format-support-design.md`.
 
 ### Later (unscheduled, non-blocking)
 
@@ -677,14 +704,6 @@ per-phase reports in `docs/briefs/` (`v1.4.0-session-u-*`). Locked as each phase
   characters the author wrote; evaluate escape-to-visible-text as the display default, and
   separately whether closed, well-formed details blocks deserve real collapsible
   rendering — a sanitiser-allowlist decision requiring its own written brief.
-- Launcher message polish (POSIX) — on the missing-venv-module path, Python's raw
-  ensurepip error prints before the friendly message; consider suppressing or summarising
-  the underlying stderr so the friendly message stands alone.
-- Launcher detection polish (Windows) — when the `py` launcher's default is pinned to an
-  older Python, installing a newer one doesn't change what `py -3` reports, so the too-old
-  message's advice can appear not to work; consider probing the launcher's full list
-  (`py -0p`) or versioned qualifiers before declaring "too old", or mentioning the pin
-  possibility in the message.
 
 ### 1.4+ (unscheduled)
 

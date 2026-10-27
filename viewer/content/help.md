@@ -6,7 +6,7 @@ The sections below cover everything from requesting an export to advanced taggin
 
 ## Getting your export from Anthropic
 
-In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open **Settings**, go to the **Privacy** section, and click **Export data**. Anthropic processes the request and emails you a download link; the link expires after 24 hours, so download promptly. Current exports arrive as a small manifest file whose links download up to four ZIP files (conversations, projects, memories, and account metadata); download them all and upload them to the viewer together, exactly as downloaded — there's no need to unzip anything. Older single-ZIP exports load exactly as before.
+In Claude (claude.ai or the desktop app), click your initials in the lower-left corner, open **Settings**, go to the **Privacy** section, and click **Export data**. Anthropic processes the request and emails you a download link; the link expires after 24 hours, so download promptly. Current exports arrive as a small manifest file listing several ZIP files (conversations, projects, memories, account metadata, and — if you use them — published artifacts and Claude Code scheduled tasks); download them all and upload them to the viewer together, exactly as downloaded — there's no need to unzip anything. If all you have is the manifest file, the [Download links](/manifest) page turns it into one-click links. Older single-ZIP exports load exactly as before.
 
 If you're on a Claude Team or Enterprise plan, individual members can't self-export; the organisation owner has to run an export from Organization settings.
 
@@ -14,7 +14,9 @@ The export contains your conversations (including messages on alternate branches
 
 ## Loading an export into the viewer
 
-Choose your export files and upload them together — every ZIP from a current export plus, optionally, the manifest, or a single legacy ZIP. You can load a partial set; a banner will tell you what's missing and which features are affected.
+Choose your export files and upload them together — every ZIP from a current export plus, optionally, the manifest, or a single legacy ZIP. You can load a partial set; a banner will tell you what's missing and which features are affected. A file the viewer doesn't recognise is skipped with a notice, and the rest of your export loads.
+
+Current exports can also include files for published artifacts, artifact data, and Claude Code scheduled tasks. This version accepts them with the rest of your export and keeps them, but doesn't display them yet.
 
 Your manifest file contains live, signed download links to your export. Treat it like the export itself: don't share it, post it, or commit it anywhere public.
 
@@ -61,8 +63,9 @@ The full reading view. Messages are labelled **User** and **Assistant** and visu
 
 - **Text** renders as formatted markdown. Where a current export records the web sources a passage cited, a small **Sources** list appears beneath the paragraph.
 - **Thinking blocks** (Claude's internal reasoning, where present) are collapsed by default — teased by Claude's own one-line summary when the export provides one, or by a size summary otherwise. Expand to read the reasoning, with the full summary list above it. Blocks the export marks truncated or cut off say so, and a block hidden in the Claude app carries a small **Hidden in the app** badge — the viewer shows everything in your export.
-- **Tool use and tool results** render as labelled cards showing the tool name. Where a current export carries the app's own display content, the card shows it — tables as tables, links as links, code as highlighted code — and anything structured beyond that folds into a collapsed section that expands to formatted JSON.
+- **Tool use and tool results** render as labelled cards showing the tool name. Where a current export carries the app's own display content, the card shows it — tables as tables, links as links, code as highlighted code — and anything structured beyond that folds into a collapsed section that expands to formatted JSON. Long display content (over 30 lines or 2,000 characters) starts collapsed, labelled with the tool's own status line and its line count.
 - **Injected prompts** (text the product added to a turn — a skill or feature preamble) appear as collapsible **Injected prompt** cards, collapsed by default.
+- **Documents** you attached to a message show as a one-line **Document** card with the document's name — the file itself isn't in the export.
 - **Attachments** are folded into expandable blocks with their extracted text inside.
 - **Files** show a one-line notice — the export contains only the reference, never the file body.
 
@@ -108,9 +111,11 @@ The **Memory** page collects every memory in the export, in up to three groups �
 
 Everything is collapsed by default — click a header to expand it.
 
+When your export includes memory files, the older memory summary is shown last, collapsed, and marked as no longer updated. To hide it from the Memory page and search, turn on Hide legacy memory. Exports without memory files always show their summary, and Inspect mode decides for each export it opens.
+
 ## The Account page
 
-Shown whenever the export includes your account file — the [Account](/account) page displays the identity data in your archive (name, email, and account ID) and, for current exports, your **login history**: a table of recorded logins, newest first, with the timestamp (in your local time), method, IP address, location, and browser and operating system. Older single-ZIP exports don't include login history; the page says so. It's your data — the viewer shows everything the archive contains.
+Shown whenever the export includes your account file — the [Account](/account) page displays the identity data in your archive (name, email, and account ID) and, for current exports, your **login history**: a table of recorded logins, newest first, with the timestamp (in your local time), method, IP address, location, and browser and operating system. Single-ZIP exports include login history only when the archive carries it (older ones don't); when it's absent, the page says so. It's your data — the viewer shows everything the archive contains.
 
 ## Search
 
@@ -164,6 +169,8 @@ The [History](/history) page records every export load — when, whether it came
 ## Appearance
 
 The viewer follows your system's light or dark preference by default. Use the Theme control at the end of the navigation bar to choose Light or Dark instead; the choice is remembered on this machine in a small cookie the app sets for itself — nothing is sent anywhere. Printing and PDF output always use the light theme.
+
+The Hide legacy memory choice is remembered the same way, in a cookie named viewer_legacy_memory. Nothing is sent anywhere.
 
 ## Backups and your data
 

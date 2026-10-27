@@ -1186,7 +1186,17 @@ def _current_light_metadata_files() -> dict[str, bytes]:
 
 
 def _current_manifest_bytes() -> bytes:
-    categories = ["light_metadata", "projects", "memories", "conversations"]
+    # The full eight-file delivery (v1.3.1): the manifest plus seven
+    # category ZIPs, in the order observed in real manifests.
+    categories = [
+        "light_metadata",
+        "projects",
+        "memories",
+        "frames",
+        "artifact_data",
+        "claude_code_cloud",
+        "conversations",
+    ]
     manifest = {
         "version": "1.0",
         "created_at": "2026-08-25T05:00:00.000000+00:00",
@@ -1682,6 +1692,9 @@ FIXTURE_SETS: dict[str, dict[str, Any]] = {
         "projects-000.zip": _current_projects_files,
         "memories-000.zip": _current_memories_files,
         "light_metadata-000.zip": _current_light_metadata_files,
+        "frames-000.zip": _frames_files,
+        "artifact_data-000.zip": _artifact_data_files,
+        "claude_code_cloud-000.zip": _claude_code_cloud_files,
     },
     "current_two_part": {
         "conversations-000.zip": _current_conversations_part0_files,

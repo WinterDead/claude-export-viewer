@@ -25,6 +25,7 @@ from viewer.parser import (
     Attachment,
     ContentBlock,
     Conversation,
+    DocumentBlock,
     FileRef,
     TextBlock,
     ThinkingBlock,
@@ -227,6 +228,9 @@ def _render_blocks(blocks: list[ContentBlock], options: ExportOptions) -> list[s
             # types, so the orphan form gets its own card rather than being
             # dropped (preserve-and-flag).
             segments.append(f"> **[Tool: {block.name}]** {_result_summary(block)}")
+        elif isinstance(block, DocumentBlock):
+            # Copy D6: the attached document's export line (v1.3.1).
+            segments.append(f"> **[Document: {document_title(block)}]**")
         else:
             segments.append(_unknown_segment(block))
         i += 1
@@ -293,6 +297,11 @@ def _branch_annotation(alternates: int) -> str:
         f"> **[Branch point]** {alternates} alternate responses exist "
         "and are not included in this file."
     )
+
+
+def document_title(block: DocumentBlock) -> str:
+    """The document's display title, D6's fallback when the export has none."""
+    return _single_line(block.title) if block.title else "Untitled document"
 
 
 def _unknown_segment(block: object) -> str:

@@ -157,6 +157,14 @@
           <summary>Injected prompt</summary>
           <div class="markdown-body injected-prompt-body">{{ block.prompt | markdown }}</div>
         </details>
+      {% elif bt == 'document' %}
+        {# Copy D6 (v1.3.1): an attached document as a labelled file line;
+           the file itself is never in the export. #}
+        <aside class="block-card block-document">
+          <span class="block-card-tag">Document</span>
+          <span class="block-card-name">{{ block.title or 'Untitled document' }}</span>
+          <span class="block-card-meta">The file itself isn't included in the export.</span>
+        </aside>
       {% else %}
         {# Preserve-and-flag placeholder: the parser kept the block as an
            UnknownBlock carrying its raw type, so the card can name it. #}

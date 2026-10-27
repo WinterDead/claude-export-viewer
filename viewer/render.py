@@ -574,6 +574,7 @@ def block_type(block: ContentBlock) -> str:
     the parser's class names from leaking into the template layer.
     """
     from viewer.parser import (
+        DocumentBlock,
         InjectedPromptBlock,
         TextBlock,
         ThinkingBlock,
@@ -591,6 +592,8 @@ def block_type(block: ContentBlock) -> str:
         return "tool_result"
     if isinstance(block, InjectedPromptBlock):
         return "injected_prompt"
+    if isinstance(block, DocumentBlock):
+        return "document"
     return "unknown"
 
 
